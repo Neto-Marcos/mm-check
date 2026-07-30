@@ -199,18 +199,57 @@ sido descolado no ponto errado, elas divergiriam.
 | `SEPARATION` | criação de mapas e separação |
 | `EXPEDITION` | conferência de expedição |
 
+## Telas
+
+| Rota | Perfil | O que faz |
+|---|---|---|
+| `/contagem` | `STOCK` | Import do saldo, contagem, divergência ao vivo |
+| `/separacao` | `SEPARATION` | Fila de separação e leitura de coletor |
+| `/separacao/novo` | `SEPARATION` | Monta o mapa bipando o código |
+| `/conferencia` | `EXPEDITION` | Fila de conferência |
+| `/divergencias` | `EXPEDITION` | Tratativa e leituras recusadas |
+| `/admin/usuarios` | `ADMIN` | Equipe: criar, trocar senha, desativar |
+| `/api/health` | público | Healthcheck do Railway, com `SELECT 1` no banco |
+
+Acessar uma tela de outro perfil **redireciona** para a tela do próprio
+perfil, e sem sessão vai para o login — nunca dá erro. Numa página, lançar
+exceção viraria uma tela de erro 500 para o operador, que parece falha do
+sistema quando é só falta de permissão.
+
+## Deploy no Railway
+
+A v2 entra como **serviço separado**, com root directory `v2`. O `Dockerfile`
+e o `railway.json` da raiz servem a v1, que continua em produção, e não são
+tocados.
+
+```bash
+npm i -g @railway/cli
+railway login
+
+railway add --service mn-check-v2
+railway add --database postgres        # banco NOVO, nunca o da v1
+
+railway variables --set "MNCHECK_ADMIN_PASSWORD=<senha forte>"
+railway up --service mn-check-v2       # root directory: v2
+
+railway run --service mn-check-v2 npm run db:seed   # só na primeira vez
+```
+
+O container aplica `prisma migrate deploy` antes de subir: se a migration
+falhar, o serviço não sobe — melhor que servir com o schema errado.
+
+**Primeira coisa depois de entrar:** criar seu usuário pessoal em
+`/admin/usuarios` e trocar a senha do admin. A do seed é de primeiro acesso.
+
 ## Pendente
 
 Não entrou nesta fase, por decisão de escopo:
 
 - Mapas de carga por PDF/imagem com extração por IA (o v1 tem isso).
 - Rotas de entrega.
-- Tela de administração de usuários (o seed cria o admin; demais usuários
-  ainda precisam ser criados via banco).
-- Painel de divergências — os dados já são gravados, falta a tela.
-- Criação de mapa pela interface (o endpoint existe).
 - Fila de leitura offline no coletor, para o Wi-Fi de doca.
 - Service worker / uso offline.
+- Tabela de nomes de cor (o relatório traz só o código da Grade X).
 
 ## Verificação ponta a ponta já executada
 

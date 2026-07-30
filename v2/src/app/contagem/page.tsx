@@ -1,12 +1,12 @@
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requirePage } from "@/lib/guard";
 import { CountSheet, type SheetLine } from "./count-sheet";
 import { BalanceUpload } from "./balance-upload";
 
 export const dynamic = "force-dynamic";
 
 export default async function ContagemPage() {
-  await requireUser("STOCK");
+  await requirePage("STOCK");
 
   const [session, lastImport] = await Promise.all([
     db.countSession.findFirst({

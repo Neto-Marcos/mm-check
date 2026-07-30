@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { currentUser } from "@/lib/auth";
+import { LogoutButton } from "@/components/logout-button";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,6 +20,8 @@ const LINKS = [
   { href: "/contagem", label: "Contagem", roles: ["ADMIN", "STOCK"] },
   { href: "/separacao", label: "Separação", roles: ["ADMIN", "SEPARATION"] },
   { href: "/conferencia", label: "Conferência", roles: ["ADMIN", "EXPEDITION"] },
+  { href: "/divergencias", label: "Divergências", roles: ["ADMIN", "EXPEDITION"] },
+  { href: "/admin/usuarios", label: "Usuários", roles: ["ADMIN"] },
 ];
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -34,8 +37,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 {link.label}
               </Link>
             ))}
-            <span style={{ marginLeft: "auto" }} className="muted">
-              {user.name}
+            <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span className="muted">{user.name}</span>
+              <LogoutButton />
             </span>
           </nav>
         )}

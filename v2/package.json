@@ -10,7 +10,8 @@
     "lint": "next lint",
     "test": "vitest run",
     "db:push": "prisma db push",
-    "db:seed": "tsx --env-file=.env prisma/seed.ts"
+    "db:seed": "tsx --env-file=.env prisma/seed.ts",
+    "db:migrate": "prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "6.16.2",

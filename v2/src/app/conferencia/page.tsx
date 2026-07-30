@@ -1,10 +1,10 @@
-import { requireUser } from "@/lib/auth";
+import { requirePage } from "@/lib/guard";
 import { MapQueue } from "@/components/map-queue";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConferenciaPage() {
-  await requireUser("EXPEDITION");
+  await requirePage("EXPEDITION");
   return (
     <>
       <h1>Conferência de expedição</h1>
