@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { ApiError, handler, parseBody } from "@/lib/api";
 import { record, requireUser } from "@/lib/auth";
 import { loadCatalogIndex } from "@/lib/catalog";
-import { describeVariant, normalizeBarcode, resolveIndexed } from "@/domain/barcode";
+import { describeVariant, resolveIndexed } from "@/domain/barcode";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -30,7 +30,10 @@ export async function POST(request: Request, { params }: Params) {
     const { id } = await params;
     const { barcode: raw, stage } = await parseBody(request, schema);
     const user = await requireUser(stage === "SEPARATION" ? "SEPARATION" : "EXPEDITION");
-    const barcode = normalizeBarcode(raw);
+    // Guarda a leitura EXATA no log de auditoria, com separadores. Descartar
+    // a pontuacao aqui perderia justamente o que desfaz a ambiguidade entre
+    // produto e grade de cor.
+    const barcode = raw.trim();
 
     const map = await db.cargoMap.findUnique({
       where: { id },
@@ -75,7 +78,14 @@ export async function POST(request: Request, { params }: Params) {
       return result;
     }
 
-    const item = map.items.find((candidate) => candidate.product.barcode === barcode);
+    // Compara pela variante resolvida, nao pelo texto lido: duas grafias da
+    // mesma etiqueta ("74968.1.2" e "7496812") apontam para o mesmo item.
+    const item = map.items.find(
+      (candidate) =>
+        candidate.product.code === resolution.entry.code &&
+        candidate.product.gradeX === resolution.entry.gradeX &&
+        candidate.product.gradeY === resolution.entry.gradeY,
+    );
     if (!item) {
       const result = await reject(
         `${describeVariant(resolution.entry)} não pertence a este mapa`,

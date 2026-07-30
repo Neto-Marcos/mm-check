@@ -57,9 +57,9 @@ conferência. O catálogo fica indexado em memória e é invalidado a cada impor
 
 ## Duas correções descobertas na validação com o PDF real
 
-**O código de barras não tem largura fixa.** Ele é a concatenação
-`Cod Produto + Grade X + Grade Y` como sai no relatório. Como o produto tem 4
-ou 5 dígitos e a Grade X vai de 1 a 4, o código real varia de 6 a 10 dígitos:
+**O código de barras não tem largura fixa.** Ele é `Cod Produto + Grade X +
+Grade Y`, impresso com separador — `74968.1.2`, não `7496812`. Como o produto
+tem 4 ou 5 dígitos e a Grade X vai de 1 a 4, os dígitos somam de 6 a 10:
 
 | Dígitos | Variantes |
 |---|---|
@@ -71,10 +71,29 @@ ou 5 dígitos e a Grade X vai de 1 a 4, o código real varia de 6 a 10 dígitos:
 
 A v1 assumia 7 dígitos fixos (5 + 1 + 1) e por isso lia **205 de 251
 variantes — 82% do catálogo**. As outras 46 recebiam "Código inválido" no
-coletor. Na v2 o código é uma **chave**, resolvida por lookup no catálogo, não
-uma estrutura fatiada por posição — que aliás seria ambígua, já que `1191`+`3`
-e `119`+`13` produzem a mesma string. Códigos com mais de um candidato são
-recusados como ambíguos, nunca adivinhados.
+coletor.
+
+A v2 lê em dois níveis. Quando a etiqueta traz o separador, os três campos são
+conhecidos e a resolução é **exata** — `7262.89.2` e `72628.9.2` nunca se
+confundem, embora ambos concatenem para `7262892`. Quando o coletor entrega só
+os dígitos, o código vira chave de lookup no catálogo, e um código que casa com
+mais de uma variante é recusado como ambíguo em vez de adivinhado.
+
+### O que as etiquetas físicas confirmaram
+
+| Etiqueta | Prod. | Grade X | Cor impressa | Grade Y | Voltagem impressa |
+|---|---|---|---|---|---|
+| Micro-ondas Midea MHP20B | `74968.1.2` | 1 | Branco | 2 | 220 V |
+| Escova Mondial ES-50 | `72627.2489.4` | 2489 | Branco/Rose | 4 | Bivolt |
+| Escova Mondial ER-11-KR | `72628.9.2` | 9 | Vermelho | 2 | 220 V |
+
+**Grade X é o código de cor** e **Grade Y é o de voltagem** — e a tabela
+herdada da v1 se confirma no papel: `2` imprime "220 V" e `4` imprime "Bivolt".
+O relatório de saldo traz só o código da cor, não o nome, então é o código que
+aparece na tela até existir uma tabela de cores.
+
+Repare que `72627.2489.4` soma 10 dígitos: é exatamente o tipo de código que a
+v1 recusava.
 
 **O grão é a variante, não o modelo.** A v1 somava as grades de um mesmo
 produto num SKU só. Num CD de linha branca isso deixa uma falta de 220V ser

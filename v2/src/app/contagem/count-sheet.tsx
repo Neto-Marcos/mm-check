@@ -65,7 +65,9 @@ export function CountSheet({ sessionId, version, status, lines }: Props) {
       (line) =>
         line.description.toLowerCase().includes(term) ||
         line.code.includes(term) ||
-        line.barcode.includes(term),
+        line.barcode.includes(term) ||
+        // Também aceita a grafia da etiqueta, com separadores.
+        `${line.code}.${line.gradeX}.${line.gradeY}`.includes(term),
     );
   }, [preview, query]);
 
@@ -119,7 +121,7 @@ export function CountSheet({ sessionId, version, status, lines }: Props) {
         id="busca"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="REFRIGERADOR, 2552, 255212…"
+        placeholder="REFRIGERADOR, 2552, 2552.1.1…"
         autoComplete="off"
       />
       {query && (

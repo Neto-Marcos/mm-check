@@ -65,10 +65,12 @@ export function Scanner({ mapId, stage }: Props) {
       <input
         id={`scan-${mapId}`}
         ref={inputRef}
-        inputMode="numeric"
+        // Texto, não numérico: o código traz separadores ("74968.1.2") e o
+        // teclado numérico do celular esconde o ponto.
+        inputMode="text"
         autoComplete="off"
         autoFocus
-        placeholder="7548143"
+        placeholder="74968.1.2"
         disabled={busy}
       />
     </form>

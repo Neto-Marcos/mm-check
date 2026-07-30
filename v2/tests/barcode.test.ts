@@ -5,8 +5,10 @@ import {
   describeVariant,
   indexCatalog,
   normalizeBarcode,
+  parseStructuredBarcode,
   resolveBarcode,
   resolveIndexed,
+  variantKey,
   voltageLabel,
   voltageOf,
   type CatalogEntry,
@@ -138,5 +140,121 @@ describe("describeVariant", () => {
     expect(describeVariant(CATALOGO[0]!)).toBe(
       "FERRO DE PASSAR A SECO BLACK DECKER VFA · cor 3 · 127V",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Etiquetas fisicas reais, fotografadas no CD.
+// ---------------------------------------------------------------------------
+
+const ETIQUETAS: CatalogEntry[] = [
+  {
+    // Prod.: 74968.1.2 — MICRO-ONDAS MIDEA MASTERCOOK MHP20B 20L, Branco, 220 V
+    barcode: "7496812",
+    code: "74968",
+    gradeX: "1",
+    gradeY: "2",
+    description: "MICRO-ONDAS MIDEA MASTERCOOK MHP20B 20L",
+  },
+  {
+    // Prod.: 72627.2489.4 — ESCOVA SECADORA MONDIAL ES-50, Branco/Rose, Bivolt
+    barcode: "7262724894",
+    code: "72627",
+    gradeX: "2489",
+    gradeY: "4",
+    description: "ESCOVA SECADORA MONDIAL ES-50",
+  },
+  {
+    // Prod.: 72628.9.2 — ESCOVA ROTATIVA MONDIAL ER-11-KR, Vermelho, 220 V
+    barcode: "7262892",
+    code: "72628",
+    gradeX: "9",
+    gradeY: "2",
+    description: "ESCOVA ROTATIVA MONDIAL ER-11-KR",
+  },
+];
+
+describe("parseStructuredBarcode", () => {
+  it("separa os três campos da etiqueta", () => {
+    expect(parseStructuredBarcode("74968.1.2")).toEqual({
+      code: "74968",
+      gradeX: "1",
+      gradeY: "2",
+    });
+  });
+
+  it("lê grade de cor com vários dígitos", () => {
+    expect(parseStructuredBarcode("72627.2489.4")).toEqual({
+      code: "72627",
+      gradeX: "2489",
+      gradeY: "4",
+    });
+  });
+
+  it("aceita espaço, hífen e barra como separador", () => {
+    const esperado = { code: "72627", gradeX: "2489", gradeY: "4" };
+    expect(parseStructuredBarcode("72627 2489 4")).toEqual(esperado);
+    expect(parseStructuredBarcode("72627-2489-4")).toEqual(esperado);
+    expect(parseStructuredBarcode("72627/2489/4")).toEqual(esperado);
+  });
+
+  it("devolve null sem separador ou com grade de voltagem inválida", () => {
+    expect(parseStructuredBarcode("7496812")).toBeNull();
+    expect(parseStructuredBarcode("74968.1.9")).toBeNull();
+    expect(parseStructuredBarcode("74968.1")).toBeNull();
+  });
+});
+
+describe("etiquetas reais", () => {
+  it("resolve as três etiquetas com separador", () => {
+    for (const etiqueta of ETIQUETAS) {
+      const lida = variantKey(etiqueta.code, etiqueta.gradeX, etiqueta.gradeY);
+      const resolution = resolveBarcode(lida, ETIQUETAS);
+      expect(resolution.ok).toBe(true);
+      expect(resolution.ok && resolution.entry.description).toBe(etiqueta.description);
+    }
+  });
+
+  it("resolve as três etiquetas sem separador", () => {
+    for (const etiqueta of ETIQUETAS) {
+      const resolution = resolveBarcode(etiqueta.barcode, ETIQUETAS);
+      expect(resolution.ok && resolution.entry.code).toBe(etiqueta.code);
+    }
+  });
+
+  it("a voltagem impressa bate com a tabela de Grade Y", () => {
+    // 220 V, Bivolt, 220 V — como impresso nas etiquetas.
+    expect(ETIQUETAS.map((e) => voltageLabel(e.gradeY))).toEqual(["220V", "Bivolt", "220V"]);
+  });
+
+  it("aceita o código de 10 dígitos que a v1 recusava", () => {
+    // 72627 + 2489 + 4 = 10 dígitos; a v1 exigia exatamente 7.
+    expect(ETIQUETAS[1]!.barcode).toHaveLength(10);
+    expect(resolveBarcode("72627.2489.4", ETIQUETAS).ok).toBe(true);
+  });
+
+  it("o separador desfaz a ambiguidade que a concatenação criaria", () => {
+    // 7262.89.2 e 72628.9.2 concatenam para "7262892". Separados, não colidem.
+    const colidido: CatalogEntry[] = [
+      ...ETIQUETAS,
+      {
+        barcode: "7262892",
+        code: "7262",
+        gradeX: "89",
+        gradeY: "2",
+        description: "OUTRO PRODUTO QUALQUER",
+      },
+    ];
+    // Sem separador o sistema recusa, porque não tem como escolher.
+    expect(resolveBarcode("7262892", colidido)).toMatchObject({ failure: "AMBIGUO" });
+    // Com separador, cada um resolve para a sua variante.
+    expect(resolveBarcode("72628.9.2", colidido)).toMatchObject({
+      ok: true,
+      entry: { code: "72628" },
+    });
+    expect(resolveBarcode("7262.89.2", colidido)).toMatchObject({
+      ok: true,
+      entry: { code: "7262" },
+    });
   });
 });

@@ -2,7 +2,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { ApiError, handler, parseBody } from "@/lib/api";
 import { record, requireUser } from "@/lib/auth";
-import { describeVariant, normalizeBarcode } from "@/domain/barcode";
+import { describeVariant, resolveIndexed } from "@/domain/barcode";
+import { loadCatalogIndex } from "@/lib/catalog";
 
 const schema = z.object({
   number: z.string().trim().min(1, "Informe o número do mapa."),
@@ -66,29 +67,45 @@ export async function POST(request: Request) {
 
     // Resolve todas as variantes antes de criar: um codigo fora do catalogo
     // aborta o mapa inteiro em vez de gerar um item orfao.
-    const barcodes = body.items.map((item) => normalizeBarcode(item.barcode));
-    const products = await db.product.findMany({
-      where: { barcode: { in: barcodes } },
-      select: { id: true, barcode: true },
-    });
-    const idByBarcode = new Map(products.map((product) => [product.barcode, product.id]));
-
-    const missing = barcodes.filter((barcode) => !idByBarcode.has(barcode));
-    if (missing.length > 0) {
-      throw new ApiError(
-        `Código(s) fora do saldo importado: ${missing.join(", ")}. Importe o saldo atual.`,
-      );
+    // Aceita a etiqueta com separador ("74968.1.2") ou so os digitos.
+    const index = await loadCatalogIndex();
+    const resolved = body.items.map((item) => resolveIndexed(item.barcode, index));
+    const rejected = resolved.flatMap((resolution, position) =>
+      resolution.ok ? [] : [`${body.items[position]!.barcode} (${resolution.reason})`],
+    );
+    if (rejected.length > 0) {
+      throw new ApiError(`Código(s) não reconhecido(s): ${rejected.join("; ")}`);
     }
+
+    const keys = resolved.map((resolution) =>
+      resolution.ok
+        ? {
+            code: resolution.entry.code,
+            gradeX: resolution.entry.gradeX,
+            gradeY: resolution.entry.gradeY,
+          }
+        : null,
+    );
+    const products = await db.product.findMany({
+      where: { OR: keys.filter((key) => key !== null) },
+      select: { id: true, code: true, gradeX: true, gradeY: true },
+    });
+    const idByVariant = new Map(
+      products.map((product) => [`${product.code}.${product.gradeX}.${product.gradeY}`, product.id]),
+    );
 
     const map = await db.cargoMap.create({
       data: {
         number: body.number,
         createdBy: user.name,
         items: {
-          create: body.items.map((item, index) => ({
-            productId: idByBarcode.get(barcodes[index]!)!,
-            quantity: item.quantity,
-          })),
+          create: body.items.map((item, position) => {
+            const key = keys[position]!;
+            return {
+              productId: idByVariant.get(`${key.code}.${key.gradeX}.${key.gradeY}`)!,
+              quantity: item.quantity,
+            };
+          }),
         },
       },
       include: { items: true },

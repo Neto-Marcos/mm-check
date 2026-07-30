@@ -45,7 +45,12 @@ const VOLTAGE_BY_GRADE: Record<string, Voltage> = {
 
 /**
  * Variantes cujo codigo impresso na etiqueta nao corresponde a concatenacao
- * das colunas. Excecoes reais de catalogo, descobertas na operacao.
+ * das colunas do relatorio.
+ *
+ * Herdado da v1 e mantido por seguranca, mas NAO CONFIRMADO nas etiquetas
+ * fisicas conferidas ate agora — nelas o codigo sempre foi produto.cor.
+ * voltagem, sem excecao. Se este produto tambem seguir a regra geral, esta
+ * entrada deve ser removida.
  */
 const BARCODE_OVERRIDES: Record<string, string> = {
   "75480-1.2": "7548143",
@@ -69,9 +74,39 @@ export type CatalogEntry = {
   description: string;
 };
 
-/** Normaliza a leitura: coletores inserem hifens, espacos e quebras. */
+/**
+ * Digitos da leitura, sem separadores. Usado como chave de ultimo recurso,
+ * quando o coletor entrega o codigo sem pontuacao.
+ */
 export function normalizeBarcode(raw: string | null | undefined): string {
   return (raw ?? "").replace(/\D/g, "");
+}
+
+/**
+ * Leitura estruturada: os tres campos, quando a etiqueta traz separador.
+ *
+ * A etiqueta imprime `74968.1.2` — produto, grade de cor, grade de voltagem —
+ * e nao `7496812`. Preservar o separador e o que torna a leitura exata:
+ * "1191" com cor "3" e "119" com cor "13" concatenam para a mesma string, mas
+ * separados nunca se confundem.
+ *
+ * Aceita ponto, espaco, hifen ou barra como separador, porque coletores
+ * diferentes transcrevem de formas diferentes.
+ */
+export function parseStructuredBarcode(
+  raw: string | null | undefined,
+): { code: string; gradeX: string; gradeY: string } | null {
+  const groups = (raw ?? "").trim().split(/[^0-9]+/).filter(Boolean);
+  if (groups.length !== 3) return null;
+  const [code, gradeX, gradeY] = groups as [string, string, string];
+  // A grade de voltagem e sempre um unico digito de 0 a 4.
+  if (!/^[0-4]$/.test(gradeY)) return null;
+  return { code, gradeX, gradeY };
+}
+
+/** Chave canonica de uma variante, com separador preservado. */
+export function variantKey(code: string, gradeX: string, gradeY: string): string {
+  return `${code}.${gradeX}.${gradeY}`;
 }
 
 /** Codigo esperado para uma variante, respeitando as excecoes de catalogo. */
@@ -93,67 +128,73 @@ export type Resolution =
  * variante em silencio produziria divergencia impossivel de rastrear.
  */
 export function resolveBarcode(raw: string, catalog: CatalogEntry[]): Resolution {
-  const barcode = normalizeBarcode(raw);
-  if (!barcode) {
-    return { ok: false, failure: "VAZIO", reason: "Leia ou digite um código." };
-  }
-
-  const matches = catalog.filter((entry) => entry.barcode === barcode);
-  if (matches.length === 0) {
-    return {
-      ok: false,
-      failure: "PRODUTO_DESCONHECIDO",
-      reason: `Código ${barcode} não está no saldo importado.`,
-    };
-  }
-  if (matches.length > 1) {
-    return {
-      ok: false,
-      failure: "AMBIGUO",
-      reason: `Código ${barcode} corresponde a ${matches.length} variantes. Confira a etiqueta.`,
-    };
-  }
-  return { ok: true, entry: matches[0]! };
+  return resolveIndexed(raw, indexCatalog(catalog));
 }
 
-/** Indexa o catalogo por codigo, para lookup O(1) no caminho quente. */
+/**
+ * Indexa o catalogo para lookup O(1) no caminho quente.
+ *
+ * Cada variante entra por duas chaves: a estruturada (`74968.1.2`), que e
+ * exata, e a concatenada (`7496812`), usada quando o coletor entrega o codigo
+ * sem separador. Só a segunda pode colidir.
+ */
 export function indexCatalog(catalog: CatalogEntry[]): Map<string, CatalogEntry[]> {
   const index = new Map<string, CatalogEntry[]>();
-  for (const entry of catalog) {
-    const bucket = index.get(entry.barcode);
+  const push = (key: string, entry: CatalogEntry) => {
+    const bucket = index.get(key);
     if (bucket) bucket.push(entry);
-    else index.set(entry.barcode, [entry]);
+    else index.set(key, [entry]);
+  };
+  for (const entry of catalog) {
+    push(variantKey(entry.code, entry.gradeX, entry.gradeY), entry);
+    push(entry.barcode, entry);
   }
   return index;
 }
 
-export function resolveIndexed(
-  raw: string,
-  index: Map<string, CatalogEntry[]>,
-): Resolution {
-  const barcode = normalizeBarcode(raw);
-  if (!barcode) {
-    return { ok: false, failure: "VAZIO", reason: "Leia ou digite um código." };
-  }
-  const matches = index.get(barcode) ?? [];
+function lookup(key: string, index: Map<string, CatalogEntry[]>, shown: string): Resolution {
+  const matches = index.get(key) ?? [];
   if (matches.length === 0) {
     return {
       ok: false,
       failure: "PRODUTO_DESCONHECIDO",
-      reason: `Código ${barcode} não está no saldo importado.`,
+      reason: `Código ${shown} não está no saldo importado.`,
     };
   }
   if (matches.length > 1) {
     return {
       ok: false,
       failure: "AMBIGUO",
-      reason: `Código ${barcode} corresponde a ${matches.length} variantes. Confira a etiqueta.`,
+      reason: `Código ${shown} corresponde a ${matches.length} variantes. Confira a etiqueta.`,
     };
   }
   return { ok: true, entry: matches[0]! };
 }
 
-/** Rotulo curto de uma variante para a tela do operador. */
+export function resolveIndexed(raw: string, index: Map<string, CatalogEntry[]>): Resolution {
+  // Caminho preferido: a etiqueta trouxe os separadores, entao os tres campos
+  // sao conhecidos e a resolucao e exata.
+  const structured = parseStructuredBarcode(raw);
+  if (structured) {
+    const key = variantKey(structured.code, structured.gradeX, structured.gradeY);
+    return lookup(key, index, key);
+  }
+
+  const digits = normalizeBarcode(raw);
+  if (!digits) {
+    return { ok: false, failure: "VAZIO", reason: "Leia ou digite um código." };
+  }
+  return lookup(digits, index, digits);
+}
+
+/**
+ * Rotulo curto de uma variante para a tela do operador.
+ *
+ * A Grade X e o codigo de cor — confirmado nas etiquetas fisicas: cor 1 e
+ * Branco, 9 e Vermelho, 2489 e Branco/Rose. O relatorio de saldo nao traz o
+ * nome da cor, so o codigo, entao e o codigo que aparece na tela ate existir
+ * uma tabela de cores.
+ */
 export function describeVariant(entry: {
   description: string;
   gradeX: string;
