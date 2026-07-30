@@ -177,7 +177,7 @@ Acesse `http://localhost:3000`.
 ## Testes
 
 ```bash
-npm test          # 53 testes: domínio + integração contra o PDF real
+npm test          # 62 testes: domínio + integração contra o PDF real
 npx tsc --noEmit  # tipos
 npm run build     # build de produção
 ```
@@ -211,3 +211,26 @@ Não entrou nesta fase, por decisão de escopo:
 - Criação de mapa pela interface (o endpoint existe).
 - Fila de leitura offline no coletor, para o Wi-Fi de doca.
 - Service worker / uso offline.
+
+## Verificação ponta a ponta já executada
+
+O fluxo completo foi rodado contra um PostgreSQL real, com o relatório de
+saldo de produção:
+
+| Passo | Resultado |
+|---|---|
+| Login com senha correta / errada | 200 / 401 |
+| Import do PDF (multipart) | 251 variantes, 168 produtos, 5 folhas, 0 não reconciliadas |
+| Soma dos saldos gravados no banco | **31.699** — igual ao `Total Geral` do PDF |
+| Abrir contagem | 251 itens com snapshot congelado |
+| Salvar contagem | versão 0 → 1 |
+| Salvar de outra aba com versão antiga | **409**, trabalho preservado |
+| Bipar código de 6 dígitos, com e sem separador | aceito nos dois formatos |
+| Bipar código de 10 dígitos | aceito — a v1 recusa |
+| Separação completa | mapa migrou para `AWAITING_CONFERENCE` sozinho |
+| Bipar produto fora do catálogo | recusado + divergência `PRODUTO_DESCONHECIDO` |
+| Bipar variante fora do mapa | recusado + divergência `ITEM_FORA_DO_MAPA` |
+| Bipar além da quantidade | recusado |
+
+As oito leituras ficaram registradas em `scans` com o motivo de cada recusa,
+em texto legível para quem for tratar a divergência.
