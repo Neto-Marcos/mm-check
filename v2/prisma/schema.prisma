@@ -1,0 +1,239 @@
+// MN Check v2 — schema relacional.
+//
+// Decisao central: nao existe blob de estado. Cada entidade tem tabela propria,
+// cada mutacao toca apenas as linhas que mudaram. Isso elimina a classe de bug
+// em que dois operadores salvando ao mesmo tempo sobrescreviam o trabalho um do
+// outro.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SEPARATION
+  EXPEDITION
+  STOCK
+}
+
+model User {
+  id           String    @id @default(cuid())
+  username     String    @unique
+  name         String
+  role         Role
+  passwordHash String
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+
+  sessions     Session[]
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+// Sessao persistida no banco: restart do servidor nao derruba mais ninguem
+// no meio de uma separacao.
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// ---------------------------------------------------------------------------
+// Estoque e contagem
+// ---------------------------------------------------------------------------
+
+model Product {
+  sku         String    @id
+  description String?
+  active      Boolean   @default(true)
+  updatedAt   DateTime  @updatedAt
+
+  balances    Balance[]
+
+  @@map("products")
+}
+
+model BalanceImport {
+  id         String    @id @default(cuid())
+  fileName   String
+  importedBy String
+  pages      Int       @default(0)
+  linesRead  Int       @default(0)
+  linesSkipped Int     @default(0)
+  duplicates Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  balances   Balance[]
+
+  @@index([createdAt])
+  @@map("balance_imports")
+}
+
+model Balance {
+  id        String        @id @default(cuid())
+  importId  String
+  sku       String
+  systemQty Int
+
+  import    BalanceImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  product   Product       @relation(fields: [sku], references: [sku])
+
+  @@unique([importId, sku])
+  @@index([sku])
+  @@map("balances")
+}
+
+enum CountStatus {
+  OPEN
+  PAUSED
+  CLOSED
+  CANCELLED
+}
+
+model CountSession {
+  id        String      @id @default(cuid())
+  status    CountStatus @default(OPEN)
+  createdBy String
+  // Snapshot do import de saldo usado: a contagem sempre sabe contra qual
+  // saldo ela foi feita, mesmo que um import novo chegue depois.
+  importId  String
+  startedAt DateTime    @default(now())
+  closedAt  DateTime?
+  // Trava otimista: dois clientes salvando o mesmo item colidem em vez de
+  // um sobrescrever o outro silenciosamente.
+  version   Int         @default(0)
+
+  items     CountItem[]
+
+  @@index([status])
+  @@map("count_sessions")
+}
+
+model CountItem {
+  id         String       @id @default(cuid())
+  sessionId  String
+  sku        String
+  systemQty  Int
+  countedQty Int          @default(0)
+  damagedQty Int          @default(0)
+  otherQty   Int          @default(0)
+  countedAt  DateTime?
+
+  session    CountSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, sku])
+  @@map("count_items")
+}
+
+// ---------------------------------------------------------------------------
+// Mapas de carga, separacao e conferencia
+// ---------------------------------------------------------------------------
+
+enum MapStatus {
+  SEPARATING
+  AWAITING_CONFERENCE
+  CONFERRING
+  APPROVED
+  BLOCKED
+}
+
+model CargoMap {
+  id        String      @id @default(cuid())
+  number    String      @unique
+  status    MapStatus   @default(SEPARATING)
+  createdBy String
+  createdAt DateTime    @default(now())
+  closedAt  DateTime?
+
+  items       MapItem[]
+  scans       Scan[]
+  divergences Divergence[]
+
+  @@index([status])
+  @@map("cargo_maps")
+}
+
+model MapItem {
+  id        String   @id @default(cuid())
+  mapId     String
+  sku       String
+  color     String?
+  voltage   String?
+  quantity  Int
+  // Contadores por etapa: a leitura do coletor incrementa, nunca reescreve
+  // a lista inteira.
+  separated Int      @default(0)
+  conferred Int      @default(0)
+
+  map       CargoMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
+
+  @@unique([mapId, sku, color, voltage])
+  @@map("map_items")
+}
+
+enum ScanStage {
+  SEPARATION
+  CONFERENCE
+}
+
+// Log imutavel de toda leitura de coletor, aceita ou recusada.
+// E a fonte de verdade para auditoria de divergencia.
+model Scan {
+  id        String    @id @default(cuid())
+  mapId     String
+  itemId    String?
+  stage     ScanStage
+  barcode   String
+  sku       String?
+  accepted  Boolean
+  reason    String?
+  scannedBy String
+  scannedAt DateTime  @default(now())
+
+  map       CargoMap  @relation(fields: [mapId], references: [id], onDelete: Cascade)
+
+  @@index([mapId, stage])
+  @@map("scans")
+}
+
+model Divergence {
+  id         String    @id @default(cuid())
+  mapId      String
+  sku        String
+  kind       String
+  detail     String
+  resolved   Boolean   @default(false)
+  resolvedBy String?
+  createdAt  DateTime  @default(now())
+
+  map        CargoMap  @relation(fields: [mapId], references: [id], onDelete: Cascade)
+
+  @@index([mapId, resolved])
+  @@map("divergences")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  description String
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("audit_logs")
+}
