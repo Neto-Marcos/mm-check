@@ -1,13 +1,16 @@
 /**
  * Regras da contagem de estoque.
  *
- * O saldo do sistema e sempre um snapshot tirado no inicio da contagem, nunca
- * o saldo "ao vivo". Sem isso, um import de PDF no meio da contagem mudaria a
- * base de comparacao e as divergencias ficariam sem sentido.
+ * O saldo do sistema e sempre um snapshot tirado na abertura da contagem,
+ * nunca o saldo "ao vivo". Sem isso, um import de PDF no meio da contagem
+ * mudaria a base de comparacao e as divergencias ficariam sem sentido.
+ *
+ * O grao e a variante (produto + grade de cor + grade de voltagem), nao o
+ * modelo. Contar um refrigerador 127V junto com o 220V esconde falta.
  */
 
 export type CountInput = {
-  sku: string;
+  productId: string;
   systemQty: number;
   countedQty: number;
   damagedQty: number;
@@ -22,8 +25,6 @@ export type CountLine = CountInput & {
   status: "OK" | "SOBRA" | "FALTA";
 };
 
-export const SKU_PATTERN = /^[A-Za-z0-9.\-]{1,64}$/;
-
 export class CountValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -31,7 +32,7 @@ export class CountValidationError extends Error {
   }
 }
 
-export function evaluateLine(input: CountInput): CountLine {
+export function evaluateLine<T extends CountInput>(input: T): T & CountLine {
   const physicalQty = input.countedQty + input.damagedQty + input.otherQty;
   const difference = physicalQty - input.systemQty;
   return {
@@ -44,8 +45,8 @@ export function evaluateLine(input: CountInput): CountLine {
 
 /**
  * Valida e consolida as linhas enviadas pelo operador.
- * Rejeita SKU fora do snapshot e SKU duplicado — os dois casos indicam que o
- * cliente esta trabalhando sobre uma base desatualizada.
+ * Rejeita variante fora do snapshot e variante duplicada — os dois casos
+ * indicam que o cliente esta trabalhando sobre uma base desatualizada.
  */
 export function buildCount(
   inputs: Omit<CountInput, "systemQty">[],
@@ -60,27 +61,25 @@ export function buildCount(
 
   const seen = new Set<string>();
   return inputs.map((input) => {
-    const sku = input.sku.trim();
-    if (!SKU_PATTERN.test(sku)) {
-      throw new CountValidationError(`SKU inválido na contagem: ${sku}`);
+    if (seen.has(input.productId)) {
+      throw new CountValidationError(`Produto duplicado na contagem: ${input.productId}`);
     }
-    if (seen.has(sku)) {
-      throw new CountValidationError(`SKU duplicado na contagem: ${sku}`);
-    }
-    seen.add(sku);
+    seen.add(input.productId);
 
-    const systemQty = snapshot.get(sku);
+    const systemQty = snapshot.get(input.productId);
     if (systemQty === undefined) {
-      throw new CountValidationError(`SKU não pertence ao saldo atual: ${sku}`);
+      throw new CountValidationError(
+        `Produto não pertence ao saldo desta contagem: ${input.productId}`,
+      );
     }
     if (input.countedQty < 0 || input.damagedQty < 0 || input.otherQty < 0) {
       throw new CountValidationError("As quantidades não podem ser negativas.");
     }
-    return evaluateLine({ ...input, sku, systemQty });
+    return evaluateLine({ ...input, systemQty });
   });
 }
 
-export function summarize(lines: CountLine[]) {
+export function summarize(lines: Pick<CountLine, "status" | "difference">[]) {
   return {
     total: lines.length,
     ok: lines.filter((line) => line.status === "OK").length,

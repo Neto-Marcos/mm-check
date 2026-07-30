@@ -28,8 +28,8 @@ export async function GET() {
 /**
  * Abre uma contagem sobre o import de saldo mais recente.
  *
- * O snapshot e materializado em count_items no momento da abertura: um import
- * novo no meio da contagem nao muda mais a base de comparacao.
+ * O snapshot e materializado em count_items na abertura: um import novo no
+ * meio da contagem nao muda mais a base de comparacao.
  */
 export async function POST() {
   return handler(async () => {
@@ -43,8 +43,8 @@ export async function POST() {
       throw new ApiError("Importe um PDF de saldo antes de abrir uma contagem.", 409);
     }
 
-    const open = await db.countSession.findFirst({ where: { status: "OPEN" } });
-    if (open) throw new ApiError("Já existe uma contagem aberta. Finalize ou cancele antes.", 409);
+    const open = await db.countSession.findFirst({ where: { status: { in: ["OPEN", "PAUSED"] } } });
+    if (open) throw new ApiError("Já existe uma contagem em andamento. Finalize ou cancele antes.", 409);
 
     const session = await db.countSession.create({
       data: {
@@ -52,7 +52,7 @@ export async function POST() {
         importId: latest.id,
         items: {
           create: latest.balances.map((balance) => ({
-            sku: balance.sku,
+            productId: balance.productId,
             systemQty: balance.systemQty,
           })),
         },
@@ -60,7 +60,11 @@ export async function POST() {
       include: { items: true },
     });
 
-    await record(user.id, "count_open", `Contagem ${session.id} aberta com ${session.items.length} SKUs`);
+    await record(
+      user.id,
+      "count_open",
+      `Contagem ${session.id} aberta com ${session.items.length} variantes`,
+    );
     return { id: session.id, items: session.items.length };
   })();
 }

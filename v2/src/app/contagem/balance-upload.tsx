@@ -32,7 +32,7 @@ export function BalanceUpload() {
     }
     setMessage({
       ok: true,
-      text: `${data.skus} SKUs importados em ${data.metrics.pages} folha(s).`,
+      text: `${data.variants} variantes de ${data.products} produtos, em ${data.metrics.pages} folha(s).`,
     });
     router.refresh();
   }

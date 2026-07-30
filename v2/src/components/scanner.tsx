@@ -37,9 +37,11 @@ export function Scanner({ mapId, stage }: Props) {
     if (!response.ok) {
       setFeedback({ ok: false, message: data.error ?? "Falha ao registrar a leitura." });
     } else if (data.accepted) {
+      // Confirma pelo nome do produto: o operador valida o que tem na mão,
+      // não um número que ele não tem como conferir.
       setFeedback({
         ok: true,
-        message: `${data.sku} — ${data.counted}/${data.quantity}${
+        message: `${data.product} — ${data.counted}/${data.quantity}${
           data.mapComplete ? " · mapa concluído" : ""
         }`,
       });

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
 import { AuthError } from "./auth";
 import { CountValidationError } from "@/domain/counting";
-import { InvalidBarcodeError } from "@/domain/barcode";
 
 export class ApiError extends Error {
   constructor(
@@ -26,7 +25,7 @@ export function handler<T>(fn: () => Promise<T>) {
       if (error instanceof AuthError || error instanceof ApiError) {
         return NextResponse.json({ error: error.message }, { status: error.status });
       }
-      if (error instanceof CountValidationError || error instanceof InvalidBarcodeError) {
+      if (error instanceof CountValidationError) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
       if (error instanceof ZodError) {

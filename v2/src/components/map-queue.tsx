@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { barcodeForSku } from "@/domain/barcode";
+import { describeVariant } from "@/domain/barcode";
 import { Scanner } from "./scanner";
 import type { MapStatus } from "@prisma/client";
 
@@ -11,13 +11,13 @@ type Props = {
 
 /**
  * Fila de mapas de uma etapa. Server Component: os dados chegam renderizados,
- * sem o cliente ter que buscar o estado inteiro do sistema como no v1.
+ * sem o cliente ter que buscar o estado inteiro do sistema como na v1.
  */
 export async function MapQueue({ stage, statuses, empty }: Props) {
   const maps = await db.cargoMap.findMany({
     where: { status: { in: statuses } },
     include: {
-      items: { orderBy: { sku: "asc" } },
+      items: { include: { product: true }, orderBy: { product: { description: "asc" } } },
       divergences: { where: { resolved: false } },
     },
     orderBy: { createdAt: "asc" },
@@ -57,10 +57,8 @@ export async function MapQueue({ stage, statuses, empty }: Props) {
               <table>
                 <thead>
                   <tr>
-                    <th>SKU</th>
+                    <th>Produto</th>
                     <th>Código</th>
-                    <th>Cor</th>
-                    <th>Voltagem</th>
                     <th>Lido</th>
                   </tr>
                 </thead>
@@ -70,10 +68,14 @@ export async function MapQueue({ stage, statuses, empty }: Props) {
                     const complete = counted >= item.quantity;
                     return (
                       <tr key={item.id}>
-                        <td>{item.sku}</td>
-                        <td className="muted">{barcodeForSku(item.sku)}</td>
-                        <td>{item.color ?? "—"}</td>
-                        <td>{item.voltage ?? "—"}</td>
+                        {/* Descricao como linha principal: o operador confere
+                            pelo nome do produto, nao pelo numero. */}
+                        <td>
+                          <strong>{item.product.description}</strong>
+                          <br />
+                          <span className="muted">{describeVariant(item.product)}</span>
+                        </td>
+                        <td className="muted">{item.product.barcode}</td>
                         <td>
                           <span className={`badge ${complete ? "ok" : "warn"}`}>
                             {counted}/{item.quantity}

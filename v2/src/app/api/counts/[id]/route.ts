@@ -2,7 +2,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { ApiError, handler, parseBody } from "@/lib/api";
 import { record, requireUser } from "@/lib/auth";
-import { SKU_PATTERN, evaluateLine, summarize } from "@/domain/counting";
+import { evaluateLine, summarize } from "@/domain/counting";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,7 +13,7 @@ const schema = z.object({
   items: z
     .array(
       z.object({
-        sku: z.string().regex(SKU_PATTERN, "SKU inválido na contagem."),
+        productId: z.string().min(1, "Produto inválido na contagem."),
         countedQty: z.number().int().min(0, "As quantidades não podem ser negativas."),
         damagedQty: z.number().int().min(0).default(0),
         otherQty: z.number().int().min(0).default(0),
@@ -28,7 +28,7 @@ export async function GET(_request: Request, { params }: Params) {
     const { id } = await params;
     const session = await db.countSession.findUnique({
       where: { id },
-      include: { items: { orderBy: { sku: "asc" } } },
+      include: { items: { include: { product: true }, orderBy: { product: { description: "asc" } } } },
     });
     if (!session) throw new ApiError("Contagem não encontrada.", 404);
 
@@ -46,7 +46,7 @@ export async function GET(_request: Request, { params }: Params) {
 /**
  * Salva parcialmente uma contagem.
  *
- * Grava apenas os SKUs enviados — o v1 reescrevia a lista inteira a cada save,
+ * Grava apenas as variantes enviadas — o v1 reescrevia a lista inteira a cada save,
  * o que fazia dois operadores na mesma contagem apagarem o trabalho um do
  * outro. Aqui a versao protege: se ela nao bate, o cliente recebe 409 e
  * recarrega em vez de sobrescrever.
@@ -71,10 +71,10 @@ export async function PATCH(request: Request, { params }: Params) {
       }
 
       for (const item of body.items) {
-        // updateMany com sessionId no where: um SKU de outra contagem nunca
-        // e atingido, mesmo que o cliente mande o sku errado.
+        // updateMany com sessionId no where: um item de outra contagem nunca
+        // e atingido, mesmo que o cliente mande o id errado.
         const changed = await tx.countItem.updateMany({
-          where: { sessionId: id, sku: item.sku },
+          where: { sessionId: id, productId: item.productId },
           data: {
             countedQty: item.countedQty,
             damagedQty: item.damagedQty,
@@ -83,7 +83,7 @@ export async function PATCH(request: Request, { params }: Params) {
           },
         });
         if (changed.count === 0) {
-          throw new ApiError(`SKU não pertence ao saldo desta contagem: ${item.sku}`);
+          throw new ApiError(`Produto não pertence ao saldo desta contagem: ${item.productId}`);
         }
       }
 
@@ -95,7 +95,7 @@ export async function PATCH(request: Request, { params }: Params) {
           version: { increment: 1 },
           closedAt: status === "CLOSED" || status === "CANCELLED" ? new Date() : null,
         },
-        include: { items: { orderBy: { sku: "asc" } } },
+        include: { items: { include: { product: true }, orderBy: { product: { description: "asc" } } } },
       });
     });
 
@@ -103,7 +103,7 @@ export async function PATCH(request: Request, { params }: Params) {
     await record(
       user.id,
       "count_update",
-      `Contagem ${id} atualizada em ${body.items.length} SKUs (${updated.status})`,
+      `Contagem ${id} atualizada em ${body.items.length} variante(s) (${updated.status})`,
     );
 
     return {

@@ -1,7 +1,6 @@
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { evaluateLine } from "@/domain/counting";
-import { CountSheet } from "./count-sheet";
+import { CountSheet, type SheetLine } from "./count-sheet";
 import { BalanceUpload } from "./balance-upload";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +11,9 @@ export default async function ContagemPage() {
   const [session, lastImport] = await Promise.all([
     db.countSession.findFirst({
       where: { status: { in: ["OPEN", "PAUSED"] } },
-      include: { items: { orderBy: { sku: "asc" } } },
+      include: {
+        items: { include: { product: true }, orderBy: { product: { description: "asc" } } },
+      },
       orderBy: { startedAt: "desc" },
     }),
     db.balanceImport.findFirst({
@@ -21,7 +22,19 @@ export default async function ContagemPage() {
     }),
   ]);
 
-  const lines = session?.items.map(evaluateLine) ?? [];
+  const lines: SheetLine[] =
+    session?.items.map((item) => ({
+      productId: item.productId,
+      code: item.product.code,
+      gradeX: item.product.gradeX,
+      gradeY: item.product.gradeY,
+      description: item.product.description,
+      barcode: item.product.barcode,
+      systemQty: item.systemQty,
+      countedQty: item.countedQty,
+      damagedQty: item.damagedQty,
+      otherQty: item.otherQty,
+    })) ?? [];
 
   return (
     <>
@@ -31,7 +44,7 @@ export default async function ContagemPage() {
         <h2 style={{ marginTop: 0 }}>Saldo do sistema</h2>
         {lastImport ? (
           <p className="muted">
-            {lastImport._count.balances} SKUs · {lastImport.fileName} · importado por{" "}
+            {lastImport._count.balances} variantes · {lastImport.fileName} · importado por{" "}
             {lastImport.importedBy} em {lastImport.createdAt.toLocaleString("pt-BR")}
             {lastImport.linesSkipped > 0 && ` · ${lastImport.linesSkipped} linha(s) ignorada(s)`}
           </p>

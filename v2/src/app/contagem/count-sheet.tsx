@@ -1,23 +1,36 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import type { CountLine } from "@/domain/counting";
+import { useMemo, useState } from "react";
 import { evaluateLine, summarize } from "@/domain/counting";
+import { voltageLabel } from "@/domain/barcode";
+
+export type SheetLine = {
+  productId: string;
+  code: string;
+  gradeX: string;
+  gradeY: string;
+  description: string;
+  barcode: string;
+  systemQty: number;
+  countedQty: number;
+  damagedQty: number;
+  otherQty: number;
+};
 
 type Props = {
   sessionId: string;
   version: number;
   status: string;
-  lines: CountLine[];
+  lines: SheetLine[];
 };
 
 type Draft = Record<string, { countedQty: number; damagedQty: number; otherQty: number }>;
 
-function toDraft(lines: CountLine[]): Draft {
+function toDraft(lines: SheetLine[]): Draft {
   return Object.fromEntries(
     lines.map((line) => [
-      line.sku,
+      line.productId,
       {
         countedQty: line.countedQty,
         damagedQty: line.damagedQty,
@@ -32,20 +45,34 @@ export function CountSheet({ sessionId, version, status, lines }: Props) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(lines));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  // Só os SKUs tocados sobem no save — o v1 reenviava a planilha inteira.
+  // Só as variantes tocadas sobem no save — a v1 reenviava a planilha inteira.
   const [touched, setTouched] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
 
   // Recalcula ao vivo com a mesma função que o servidor usa, então a prévia
   // nunca diverge do resultado gravado.
-  const preview = lines.map((line) =>
-    evaluateLine({ ...line, ...draft[line.sku] }),
+  const preview = useMemo(
+    () => lines.map((line) => evaluateLine({ ...line, ...draft[line.productId] })),
+    [lines, draft],
   );
   const live = summarize(preview);
 
-  function update(sku: string, field: keyof Draft[string], raw: string) {
+  // Com centenas de variantes, rolar até achar é o gargalo real da tela.
+  const visible = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return preview;
+    return preview.filter(
+      (line) =>
+        line.description.toLowerCase().includes(term) ||
+        line.code.includes(term) ||
+        line.barcode.includes(term),
+    );
+  }, [preview, query]);
+
+  function update(productId: string, field: keyof Draft[string], raw: string) {
     const value = Math.max(0, Number.parseInt(raw, 10) || 0);
-    setDraft((current) => ({ ...current, [sku]: { ...current[sku], [field]: value } }));
-    setTouched((current) => new Set(current).add(sku));
+    setDraft((current) => ({ ...current, [productId]: { ...current[productId]!, [field]: value } }));
+    setTouched((current) => new Set(current).add(productId));
   }
 
   async function save(nextStatus?: "PAUSED" | "CLOSED" | "CANCELLED") {
@@ -58,7 +85,7 @@ export function CountSheet({ sessionId, version, status, lines }: Props) {
       body: JSON.stringify({
         version,
         status: nextStatus,
-        items: [...touched].map((sku) => ({ sku, ...draft[sku] })),
+        items: [...touched].map((productId) => ({ productId, ...draft[productId]! })),
       }),
     });
     const data = await response.json();
@@ -83,15 +110,29 @@ export function CountSheet({ sessionId, version, status, lines }: Props) {
       {message && <p className={`feedback ${message.ok ? "ok" : "danger"}`}>{message.text}</p>}
 
       <p className="muted">
-        {live.total} SKUs · <strong>{live.ok}</strong> ok · {live.falta} falta · {live.sobra} sobra ·
-        líquido {live.net > 0 ? `+${live.net}` : live.net}
+        {live.total} variantes · <strong>{live.ok}</strong> ok · {live.falta} falta · {live.sobra}{" "}
+        sobra · líquido {live.net > 0 ? `+${live.net}` : live.net}
       </p>
+
+      <label htmlFor="busca">Buscar produto</label>
+      <input
+        id="busca"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="REFRIGERADOR, 2552, 255212…"
+        autoComplete="off"
+      />
+      {query && (
+        <p className="muted">
+          {visible.length} de {preview.length} variantes
+        </p>
+      )}
 
       <div className="scroll-x">
         <table>
           <thead>
             <tr>
-              <th>SKU</th>
+              <th>Produto</th>
               <th>Sistema</th>
               <th>Contado</th>
               <th>Avariado</th>
@@ -100,18 +141,24 @@ export function CountSheet({ sessionId, version, status, lines }: Props) {
             </tr>
           </thead>
           <tbody>
-            {preview.map((line) => (
-              <tr key={line.sku}>
-                <td>{line.sku}</td>
+            {visible.map((line) => (
+              <tr key={line.productId}>
+                <td style={{ minWidth: "14rem" }}>
+                  <strong>{line.description}</strong>
+                  <br />
+                  <span className="muted">
+                    {line.code} · cor {line.gradeX} · {voltageLabel(line.gradeY)}
+                  </span>
+                </td>
                 <td className="muted">{line.systemQty}</td>
                 <td>
                   <input
                     type="number"
                     min={0}
                     inputMode="numeric"
-                    aria-label={`Contado ${line.sku}`}
-                    value={draft[line.sku]?.countedQty ?? 0}
-                    onChange={(event) => update(line.sku, "countedQty", event.target.value)}
+                    aria-label={`Contado ${line.description}`}
+                    value={draft[line.productId]?.countedQty ?? 0}
+                    onChange={(event) => update(line.productId, "countedQty", event.target.value)}
                   />
                 </td>
                 <td>
@@ -119,9 +166,9 @@ export function CountSheet({ sessionId, version, status, lines }: Props) {
                     type="number"
                     min={0}
                     inputMode="numeric"
-                    aria-label={`Avariado ${line.sku}`}
-                    value={draft[line.sku]?.damagedQty ?? 0}
-                    onChange={(event) => update(line.sku, "damagedQty", event.target.value)}
+                    aria-label={`Avariado ${line.description}`}
+                    value={draft[line.productId]?.damagedQty ?? 0}
+                    onChange={(event) => update(line.productId, "damagedQty", event.target.value)}
                   />
                 </td>
                 <td>
@@ -129,9 +176,9 @@ export function CountSheet({ sessionId, version, status, lines }: Props) {
                     type="number"
                     min={0}
                     inputMode="numeric"
-                    aria-label={`Outros ${line.sku}`}
-                    value={draft[line.sku]?.otherQty ?? 0}
-                    onChange={(event) => update(line.sku, "otherQty", event.target.value)}
+                    aria-label={`Outros ${line.description}`}
+                    value={draft[line.productId]?.otherQty ?? 0}
+                    onChange={(event) => update(line.productId, "otherQty", event.target.value)}
                   />
                 </td>
                 <td>

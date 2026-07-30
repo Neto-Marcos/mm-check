@@ -22,16 +22,16 @@ enum Role {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  username     String    @unique
+  id           String   @id @default(cuid())
+  username     String   @unique
   name         String
   role         Role
   passwordHash String
-  active       Boolean   @default(true)
-  createdAt    DateTime  @default(now())
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
 
-  sessions     Session[]
-  auditLogs    AuditLog[]
+  sessions  Session[]
+  auditLogs AuditLog[]
 
   @@map("users")
 }
@@ -45,7 +45,7 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
   @@map("sessions")
@@ -55,44 +55,61 @@ model Session {
 // Estoque e contagem
 // ---------------------------------------------------------------------------
 
+// Uma variante fisica: modelo + grade de cor + grade de voltagem.
+// Este e o grao do sistema inteiro. O modelo sozinho nao basta: um
+// refrigerador 127V e um 220V sao estoques distintos, e somar os dois deixa
+// uma falta ser mascarada por uma sobra.
 model Product {
-  sku         String    @id
-  description String?
-  active      Boolean   @default(true)
-  updatedAt   DateTime  @updatedAt
+  id          String   @id @default(cuid())
+  code        String
+  gradeX      String
+  gradeY      String
+  description String
+  // Codigo lido pelo coletor: as tres colunas concatenadas, como saem no
+  // relatorio. Largura variavel (6 a 10 digitos no catalogo real).
+  barcode     String
+  active      Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
 
-  balances    Balance[]
+  balances   Balance[]
+  countItems CountItem[]
+  mapItems   MapItem[]
 
+  @@unique([code, gradeX, gradeY])
+  // Indice unico: a validacao de leitura e o caminho mais quente do sistema,
+  // percorrido duas vezes por peca (separacao e conferencia).
+  @@unique([barcode])
+  @@index([description])
   @@map("products")
 }
 
 model BalanceImport {
-  id         String    @id @default(cuid())
-  fileName   String
-  importedBy String
-  pages      Int       @default(0)
-  linesRead  Int       @default(0)
-  linesSkipped Int     @default(0)
-  duplicates Int       @default(0)
-  createdAt  DateTime  @default(now())
+  id           String   @id @default(cuid())
+  fileName     String
+  importedBy   String
+  pages        Int      @default(0)
+  linesRead    Int      @default(0)
+  linesSkipped Int      @default(0)
+  unreconciled Int      @default(0)
+  createdAt    DateTime @default(now())
 
-  balances   Balance[]
+  balances Balance[]
 
   @@index([createdAt])
   @@map("balance_imports")
 }
 
 model Balance {
-  id        String        @id @default(cuid())
+  id        String @id @default(cuid())
   importId  String
-  sku       String
+  productId String
   systemQty Int
 
-  import    BalanceImport @relation(fields: [importId], references: [id], onDelete: Cascade)
-  product   Product       @relation(fields: [sku], references: [sku])
+  import  BalanceImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  product Product       @relation(fields: [productId], references: [id])
 
-  @@unique([importId, sku])
-  @@index([sku])
+  @@unique([importId, productId])
+  @@index([productId])
   @@map("balances")
 }
 
@@ -116,25 +133,27 @@ model CountSession {
   // um sobrescrever o outro silenciosamente.
   version   Int         @default(0)
 
-  items     CountItem[]
+  items CountItem[]
 
   @@index([status])
   @@map("count_sessions")
 }
 
 model CountItem {
-  id         String       @id @default(cuid())
+  id         String    @id @default(cuid())
   sessionId  String
-  sku        String
+  productId  String
+  // Snapshot do saldo no momento em que a contagem foi aberta.
   systemQty  Int
-  countedQty Int          @default(0)
-  damagedQty Int          @default(0)
-  otherQty   Int          @default(0)
+  countedQty Int       @default(0)
+  damagedQty Int       @default(0)
+  otherQty   Int       @default(0)
   countedAt  DateTime?
 
-  session    CountSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session CountSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  product Product      @relation(fields: [productId], references: [id])
 
-  @@unique([sessionId, sku])
+  @@unique([sessionId, productId])
   @@map("count_items")
 }
 
@@ -151,11 +170,11 @@ enum MapStatus {
 }
 
 model CargoMap {
-  id        String      @id @default(cuid())
-  number    String      @unique
-  status    MapStatus   @default(SEPARATING)
+  id        String    @id @default(cuid())
+  number    String    @unique
+  status    MapStatus @default(SEPARATING)
   createdBy String
-  createdAt DateTime    @default(now())
+  createdAt DateTime  @default(now())
   closedAt  DateTime?
 
   items       MapItem[]
@@ -167,20 +186,19 @@ model CargoMap {
 }
 
 model MapItem {
-  id        String   @id @default(cuid())
+  id        String @id @default(cuid())
   mapId     String
-  sku       String
-  color     String?
-  voltage   String?
+  productId String
   quantity  Int
   // Contadores por etapa: a leitura do coletor incrementa, nunca reescreve
   // a lista inteira.
-  separated Int      @default(0)
-  conferred Int      @default(0)
+  separated Int    @default(0)
+  conferred Int    @default(0)
 
-  map       CargoMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  map     CargoMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  product Product  @relation(fields: [productId], references: [id])
 
-  @@unique([mapId, sku, color, voltage])
+  @@unique([mapId, productId])
   @@map("map_items")
 }
 
@@ -195,31 +213,31 @@ model Scan {
   id        String    @id @default(cuid())
   mapId     String
   itemId    String?
+  productId String?
   stage     ScanStage
   barcode   String
-  sku       String?
   accepted  Boolean
   reason    String?
   scannedBy String
   scannedAt DateTime  @default(now())
 
-  map       CargoMap  @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  map CargoMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
 
   @@index([mapId, stage])
   @@map("scans")
 }
 
 model Divergence {
-  id         String    @id @default(cuid())
+  id         String   @id @default(cuid())
   mapId      String
-  sku        String
+  barcode    String
   kind       String
   detail     String
-  resolved   Boolean   @default(false)
+  resolved   Boolean  @default(false)
   resolvedBy String?
-  createdAt  DateTime  @default(now())
+  createdAt  DateTime @default(now())
 
-  map        CargoMap  @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  map CargoMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
 
   @@index([mapId, resolved])
   @@map("divergences")
@@ -232,7 +250,7 @@ model AuditLog {
   description String
   createdAt   DateTime @default(now())
 
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@map("audit_logs")
