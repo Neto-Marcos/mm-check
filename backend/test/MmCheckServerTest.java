@@ -100,6 +100,9 @@ public class MmCheckServerTest {
     BalancePdfParser.Result result = BalancePdfParser.parse(compactHeaderPdf());
     require(balanceOf(result, "1191.3.1") == 179,
         "deve separar Produto e Grade quando os rótulos são extraídos juntos");
+    require(result.rows().stream().anyMatch(row -> row.sku().equals("1191.3.1")
+            && row.description().startsWith("FERRO DE PASSAR A SECO")),
+        "deve preservar o começo da descrição quando o texto inicia antes do cabeçalho Produto");
   }
 
   private static void shouldReadRealBalancePdf(Path pdf) throws Exception {
