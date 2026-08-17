@@ -703,7 +703,7 @@ final class BalancePdfParser {
           line.between(productCode, gradeX),
           line.between(gradeX, gradeY),
           line.between(gradeY, midpoint(gradeY, description)),
-          line.between(description, balance),
+          line.between(midpoint(gradeY, description), balance),
           line.between(balance, cost),
           extractedCost,
           extractedTotal
