@@ -18,6 +18,7 @@ public class MmCheckServerTest {
     shouldReadAllPagesAndApplyBalanceRules();
     shouldSumDuplicateBalances();
     shouldRebuildBrokenRows();
+    shouldReadHeaderWhenProductAndGradeLabelsTouch();
     if (args.length > 0) shouldReadRealBalancePdf(Path.of(args[0]));
     System.out.println("MmCheckServerTest: OK");
   }
@@ -35,6 +36,11 @@ public class MmCheckServerTest {
   @Test
   void parserRebuildsRowsBrokenAcrossLines() throws Exception {
     shouldRebuildBrokenRows();
+  }
+
+  @Test
+  void parserReadsHeaderWhenProductAndGradeLabelsTouch() throws Exception {
+    shouldReadHeaderWhenProductAndGradeLabelsTouch();
   }
 
   private static void shouldReadAllPagesAndApplyBalanceRules() throws Exception {
@@ -85,6 +91,12 @@ public class MmCheckServerTest {
     require(balanceOf(result, "76331.3.4") == 112, "deve reconstruir produto quebrado em duas linhas");
     require(result.debugReport().contains("76331.3.4 = 112"),
         "debug deve registrar o produto reconstruído ou lido corretamente");
+  }
+
+  private static void shouldReadHeaderWhenProductAndGradeLabelsTouch() throws Exception {
+    BalancePdfParser.Result result = BalancePdfParser.parse(compactHeaderPdf());
+    require(balanceOf(result, "1191.3.1") == 179,
+        "deve separar Produto e Grade quando os rótulos são extraídos juntos");
   }
 
   private static void shouldReadRealBalancePdf(Path pdf) throws Exception {
@@ -186,6 +198,35 @@ public class MmCheckServerTest {
         text(content, font, 445, 700, "112");
         text(content, font, 490, 700, "480,88");
         text(content, font, 565, 700, "53858,56");
+      }
+      ByteArrayOutputStream output = new ByteArrayOutputStream();
+      document.save(output);
+      return output.toByteArray();
+    }
+  }
+
+  private static byte[] compactHeaderPdf() throws Exception {
+    try (PDDocument document = new PDDocument()) {
+      PDType1Font font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+      PDPage page = new PDPage();
+      document.addPage(page);
+      try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+        text(content, font, 22, 735, "Cod Filial");
+        text(content, font, 62, 735, "Cod Produto");
+        text(content, font, 106, 735, "Grade 'X'");
+        text(content, font, 145, 735, "Grade 'Y'");
+        text(content, font, 229, 735, "Produto");
+        text(content, font, 382, 735, "Saldo");
+        text(content, font, 450, 735, "Custo Medio");
+        text(content, font, 512, 735, "Total Csto Med");
+        text(content, font, 40, 710, "281");
+        text(content, font, 72, 710, "1191");
+        text(content, font, 123, 710, "3");
+        text(content, font, 164, 710, "1");
+        text(content, font, 195, 710, "FERRO DE PASSAR A SECO BLACK DECKER VFA");
+        text(content, font, 393, 710, "179");
+        text(content, font, 472, 710, "66,99");
+        text(content, font, 518, 710, "11991,21");
       }
       ByteArrayOutputStream output = new ByteArrayOutputStream();
       document.save(output);

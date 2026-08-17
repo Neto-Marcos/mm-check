@@ -38,6 +38,13 @@ const React = window.React;
 const ReactDOM = window.ReactDOM;
 const h = React.createElement;
 
+if ("scrollRestoration" in window.history) {
+  window.history.scrollRestoration = "manual";
+}
+window.addEventListener("pageshow", () => {
+  window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }));
+}, { once: true });
+
 const ICON_PATHS = {
   overview: ["M3 3h7v7H3z", "M14 3h7v7h-7z", "M3 14h7v7H3z", "M14 14h7v7h-7z"],
   separation: ["M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z", "m3.3 7 8.7 5 8.7-5", "M12 22V12"],
@@ -140,7 +147,7 @@ function App() {
         refreshing = true;
         window.location.reload();
       });
-      navigator.serviceWorker.register("/sw.js?v=2000")
+      navigator.serviceWorker.register("/sw.js?v=2002")
         .then((registration) => {
           if (registration.waiting && navigator.serviceWorker.controller) {
             setWaitingWorker(registration.waiting);
@@ -826,7 +833,7 @@ function App() {
       }),
       h("section", { className: "brand-panel" },
         h("div", { className: "brand-content" },
-          h("img", { className: "app-logo hero-logo", src: "/logo.png?v=2000", alt: "MN - Check" }),
+          h("img", { className: "app-logo hero-logo", src: "/logo.png?v=2002", alt: "MN - Check" }),
           h("p", { className: "eyebrow" }, "conferência operacional"),
           h("h1", null, "MN - Check"),
           h("p", null, "Controle de separação, conferência e estoque."),
@@ -888,7 +895,7 @@ function App() {
     }),
     h("aside", { className: "sidebar", "aria-label": "Navegação principal" },
       h("div", { className: "sidebar-brand" },
-        h("img", { className: "app-logo small", src: "/logo.png?v=2000", alt: "MN - Check" }),
+        h("img", { className: "app-logo small", src: "/logo.png?v=2002", alt: "MN - Check" }),
         h("div", { className: "sidebar-brand-copy" },
           h("strong", null, "MN - Check"),
           h("small", { className: "sidebar-version" }, `Versão ${appVersion}`)
@@ -3353,7 +3360,7 @@ class AppErrorBoundary extends React.Component {
   render() {
     if (!this.state.error) return this.props.children;
     return h("main", { className: "fatal-error" },
-      h("img", { className: "app-logo", src: "/logo.png?v=2000", alt: "MN - Check" }),
+      h("img", { className: "app-logo", src: "/logo.png?v=2002", alt: "MN - Check" }),
       h("p", { className: "eyebrow" }, "Falha de interface"),
       h("h1", null, "Não foi possível concluir esta operação"),
       h("p", null, "Seus dados persistidos não foram apagados. Recarregue a tela para continuar."),

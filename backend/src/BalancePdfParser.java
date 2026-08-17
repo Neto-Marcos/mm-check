@@ -518,23 +518,43 @@ final class BalancePdfParser {
 
     List<Word> words() {
       List<Word> result = new ArrayList<>();
-      StringBuilder current = new StringBuilder();
-      float startX = 0;
+      List<Glyph> current = new ArrayList<>();
       Glyph previous = null;
       for (Glyph glyph : glyphs) {
         boolean separator = glyph.text.isBlank() || (previous != null && shouldAddSpace(previous, glyph));
         if (separator && !current.isEmpty()) {
-          result.add(new Word(current.toString(), startX));
-          current.setLength(0);
+          addHeaderAwareWords(result, current);
+          current.clear();
         }
         if (!glyph.text.isBlank()) {
-          if (current.isEmpty()) startX = glyph.x;
-          current.append(glyph.text);
+          current.add(glyph);
         }
         previous = glyph;
       }
-      if (!current.isEmpty()) result.add(new Word(current.toString(), startX));
+      if (!current.isEmpty()) addHeaderAwareWords(result, current);
       return result;
+    }
+
+    private static void addHeaderAwareWords(List<Word> result, List<Glyph> wordGlyphs) {
+      String text = wordGlyphs.stream().map(Glyph::text).reduce("", String::concat);
+      String lower = text.toLowerCase(Locale.ROOT);
+      int gradeOffset = lower.indexOf("grade");
+      if (gradeOffset > 0 && normalize(text.substring(0, gradeOffset)).equals("produto")) {
+        result.add(new Word(text.substring(0, gradeOffset), wordGlyphs.get(0).x));
+        result.add(new Word(text.substring(gradeOffset), xAtCharacter(wordGlyphs, gradeOffset)));
+        return;
+      }
+      result.add(new Word(text, wordGlyphs.get(0).x));
+    }
+
+    private static float xAtCharacter(List<Glyph> wordGlyphs, int characterOffset) {
+      int consumed = 0;
+      for (Glyph glyph : wordGlyphs) {
+        int next = consumed + glyph.text.length();
+        if (characterOffset < next) return glyph.x;
+        consumed = next;
+      }
+      return wordGlyphs.get(wordGlyphs.size() - 1).x;
     }
 
     String between(float startX, float endX) {
