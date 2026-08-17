@@ -175,20 +175,24 @@ public class MmCheckServer {
       requireRole(user, "admin", "stock");
       Map<String, Object> body = readJson(exchange);
       String sku = normalizeSku(string(body.get("sku")));
+      String description = string(body.get("description")).trim();
       int systemBalance = integerField(body, "system");
       int countedQuantity = integerField(body, "counted");
+      int assistanceQuantity = optionalIntegerField(body, "assistance");
       int damagedQuantity = optionalIntegerField(body, "damaged");
       int otherQuantity = optionalIntegerField(body, "other");
       if (!sku.matches("\\d{4,8}\\.\\d{1,3}\\.\\d{1,3}")) {
         throw new ApiException(400, "Informe o SKU no formato produto.gradeX.gradeY. Exemplo: 76331.3.4.");
       }
-      if (systemBalance < 0 || countedQuantity < 0 || damagedQuantity < 0 || otherQuantity < 0) {
+      if (systemBalance < 0 || countedQuantity < 0 || assistanceQuantity < 0 || damagedQuantity < 0 || otherQuantity < 0) {
         throw new ApiException(400, "As quantidades não podem ser negativas.");
       }
       PostgresDatabase.ImportSummary summary = relationalDatabase.saveManualBalanceProduct(
           sku,
+          description,
           systemBalance,
           countedQuantity,
+          assistanceQuantity,
           damagedQuantity,
           otherQuantity,
           user.name
@@ -201,6 +205,7 @@ public class MmCheckServer {
           + " sku=" + sku
           + " saldo_sistema=" + systemBalance
           + " saldo_contado=" + countedQuantity
+          + " assistencia=" + assistanceQuantity
           + " avaria=" + damagedQuantity
           + " outros=" + otherQuantity
           + " operador=\"" + user.name + "\"");
@@ -477,7 +482,7 @@ public class MmCheckServer {
           fileName,
           user.name,
           imported.stream()
-              .map(item -> new PostgresDatabase.BalanceRow(item.sku(), item.system()))
+              .map(item -> new PostgresDatabase.BalanceRow(item.sku(), item.description(), item.system()))
               .toList(),
           metrics.pagesProcessed(),
           metrics.totalLinesRead(),
@@ -527,12 +532,17 @@ public class MmCheckServer {
         Integer system = currentBalances.get(sku);
         if (system == null) throw new ApiException(400, "SKU não pertence ao saldo atual: " + sku + ".");
         int counted = integerField(item, "counted");
+        int assistance = optionalIntegerField(item, "assistance");
         int damaged = optionalIntegerField(item, "damaged");
         int other = optionalIntegerField(item, "other");
-        if (system < 0 || counted < 0 || damaged < 0 || other < 0) {
+        if (system < 0 || counted < 0 || assistance < 0 || damaged < 0 || other < 0) {
           throw new ApiException(400, "As quantidades não podem ser negativas.");
         }
-        if (updatedBySku.putIfAbsent(sku, new CountItem(sku, system, counted, damaged, other)) != null) {
+        String description = currentSnapshot.rows().stream()
+            .filter(current -> current.sku().equals(sku))
+            .map(PostgresDatabase.CountRow::description)
+            .findFirst().orElse(string(item.get("description")));
+        if (updatedBySku.putIfAbsent(sku, new CountItem(sku, description, system, counted, assistance, damaged, other)) != null) {
           throw new ApiException(409, "SKU duplicado na contagem: " + sku + ".");
         }
       }
@@ -541,7 +551,7 @@ public class MmCheckServer {
       long countId = relationalDatabase.saveCount(
           user.name,
           updated.stream()
-              .map(item -> new PostgresDatabase.CountRow(item.sku(), item.system(), item.counted(), item.damaged(), item.other()))
+              .map(item -> new PostgresDatabase.CountRow(item.sku(), item.description(), item.system(), item.counted(), item.assistance(), item.damaged(), item.other()))
               .toList(),
           countStatus
       );
@@ -980,8 +990,10 @@ public class MmCheckServer {
     db.counts = snapshot.rows().stream()
         .map(row -> new CountItem(
             row.sku(),
+            row.description(),
             row.systemBalance(),
             row.countedQuantity(),
+            row.assistanceQuantity(),
             row.damagedQuantity(),
             row.otherQuantity()
         ))
@@ -1179,7 +1191,7 @@ public class MmCheckServer {
       throw new ApiException(422, "O PDFBox não encontrou linhas válidas com Produto, Grade X, Grade Y e Saldo.");
     }
     List<CountItem> items = parsed.rows().stream()
-        .map(row -> new CountItem(row.sku(), row.balance(), 0, 0, 0))
+        .map(row -> new CountItem(row.sku(), row.description(), row.balance(), 0, 0, 0, 0))
         .toList();
     return new CountImportResult(
         items,
@@ -1760,12 +1772,14 @@ public class MmCheckServer {
     }
   }
 
-  record CountItem(String sku, int system, int counted, int damaged, int other) {
+  record CountItem(String sku, String description, int system, int counted, int assistance, int damaged, int other) {
     Map<String, Object> toMap() {
       return Map.of(
           "sku", sku,
+          "description", description == null ? "" : description,
           "system", system,
           "counted", counted,
+          "assistance", assistance,
           "damaged", damaged,
           "other", other
       );
@@ -1939,8 +1953,10 @@ public class MmCheckServer {
         Map<String, Object> count = castMap(item);
         return new CountItem(
             string(count.get("sku")),
+            string(count.get("description")),
             number(count.get("system")),
             number(count.get("counted")),
+            optionalNumber(count, "assistance"),
             optionalNumber(count, "damaged"),
             optionalNumber(count, "other")
         );

@@ -67,6 +67,9 @@ public class MmCheckServerTest {
     require(result.metrics().totalLinesRead() > 0, "deve registrar o total de linhas lidas");
     require(balanceOf(result, "73578.1.2") == 812, "deve somar saldos do SKU duplicado");
     require(balanceOf(result, "75480.1.2") == 108, "deve separar descrição numérica do saldo");
+    require(result.rows().stream().anyMatch(row -> row.sku().equals("75480.1.2")
+            && row.description().contains("REFRIGERADOR MIDEA 394L")),
+        "deve preservar a descrição do produto para a contagem e o relatório");
     require(balanceOf(result, "73001.1.2") == 1, "deve corrigir saldo contaminado por dígitos da descrição");
     int targetBalance = balanceOf(result, "76331.3.4");
     require(targetBalance == 112, "deve importar 76331.3.4 com descrição sobreposta; saldo=" + targetBalance);

@@ -124,7 +124,8 @@ final class BalancePdfParser {
         }
 
         String sku = product + "." + gradeX + "." + gradeY;
-        Row row = new Row(sku, balance, page.number, text);
+        String description = columns.description().trim().replaceAll("\\s+", " ");
+        Row row = new Row(sku, description, balance, page.number, text);
         Row previous = unique.get(sku);
         if (previous == null) {
           unique.put(sku, row);
@@ -135,6 +136,7 @@ final class BalancePdfParser {
           int consolidatedBalance = previous.balance + balance;
           unique.put(sku, new Row(
               sku,
+              previous.description.isBlank() ? description : previous.description,
               consolidatedBalance,
               previous.page,
               previous.sourceLine + " | " + text
@@ -426,7 +428,7 @@ final class BalancePdfParser {
         .toLowerCase(Locale.ROOT);
   }
 
-  record Row(String sku, int balance, int page, String sourceLine) {}
+  record Row(String sku, String description, int balance, int page, String sourceLine) {}
 
   record Metrics(
       int pagesProcessed,
