@@ -38,6 +38,13 @@ const React = window.React;
 const ReactDOM = window.ReactDOM;
 const h = React.createElement;
 
+if ("scrollRestoration" in window.history) {
+  window.history.scrollRestoration = "manual";
+}
+window.addEventListener("pageshow", () => {
+  window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }));
+}, { once: true });
+
 const ICON_PATHS = {
   overview: ["M3 3h7v7H3z", "M14 3h7v7h-7z", "M3 14h7v7H3z", "M14 14h7v7h-7z"],
   separation: ["M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z", "m3.3 7 8.7 5 8.7-5", "M12 22V12"],
@@ -140,7 +147,7 @@ function App() {
         refreshing = true;
         window.location.reload();
       });
-      navigator.serviceWorker.register("/sw.js?v=2000")
+      navigator.serviceWorker.register("/sw.js?v=2120")
         .then((registration) => {
           if (registration.waiting && navigator.serviceWorker.controller) {
             setWaitingWorker(registration.waiting);
@@ -826,7 +833,7 @@ function App() {
       }),
       h("section", { className: "brand-panel" },
         h("div", { className: "brand-content" },
-          h("img", { className: "app-logo hero-logo", src: "/logo.png?v=2000", alt: "MN - Check" }),
+          h("img", { className: "app-logo hero-logo", src: "/logo.png?v=2120", alt: "MN - Check" }),
           h("p", { className: "eyebrow" }, "conferência operacional"),
           h("h1", null, "MN - Check"),
           h("p", null, "Controle de separação, conferência e estoque."),
@@ -888,7 +895,7 @@ function App() {
     }),
     h("aside", { className: "sidebar", "aria-label": "Navegação principal" },
       h("div", { className: "sidebar-brand" },
-        h("img", { className: "app-logo small", src: "/logo.png?v=2000", alt: "MN - Check" }),
+        h("img", { className: "app-logo small", src: "/logo.png?v=2120", alt: "MN - Check" }),
         h("div", { className: "sidebar-brand-copy" },
           h("strong", null, "MN - Check"),
           h("small", { className: "sidebar-version" }, `Versão ${appVersion}`)
@@ -1914,7 +1921,7 @@ function Counting({
   const [countFilter, setCountFilter] = React.useState("all");
   const [printFilter, setPrintFilter] = React.useState("counted");
   const [manualOpen, setManualOpen] = React.useState(false);
-  const [manualProduct, setManualProduct] = React.useState({ sku: "", system: "", counted: "", damaged: "", other: "" });
+  const [manualProduct, setManualProduct] = React.useState({ sku: "", description: "", system: "", counted: "", assistance: "", damaged: "", other: "" });
   const [savingManual, setSavingManual] = React.useState(false);
   const [printMode, setPrintMode] = React.useState(null);
   const [printGeneratedAt, setPrintGeneratedAt] = React.useState(new Date());
@@ -1997,20 +2004,25 @@ function Counting({
     }
   }
 
-  async function resetCount() {
+  async function resetCount(mode) {
     if (!draft.length || savingCount) return;
-    const hasValues = draft.some((item) => countAccounted(item) > 0);
+    const onlyCounted = mode === "counted";
+    const hasValues = draft.some((item) => onlyCounted ? item.counted > 0 : countAccounted(item) > 0);
     if (!hasValues) {
-      window.alert("A contagem já está zerada.");
+      window.alert(onlyCounted ? "A coluna Contagem já está zerada." : "A contagem já está zerada.");
       return;
     }
-    if (!window.confirm("Reiniciar a contagem? Tudo que foi contado, avaria e outros será zerado.")) return;
+    const confirmation = onlyCounted
+      ? "Zerar somente a coluna Contagem? Assistência, avaria e outros serão preservados."
+      : "Zerar todos os valores? Contagem, assistência, avaria e outros serão apagados.";
+    if (!window.confirm(confirmation)) return;
 
     const resetDraft = draft.map((item) => ({
       ...item,
       counted: 0,
-      damaged: 0,
-      other: 0
+      assistance: onlyCounted ? item.assistance : 0,
+      damaged: onlyCounted ? item.damaged : 0,
+      other: onlyCounted ? item.other : 0
     }));
     setDraft(resetDraft);
     setSearchCode("");
@@ -2034,7 +2046,7 @@ function Counting({
     if (!window.confirm(`Recontar ${divergentRows.length} itens divergentes? Os valores desses itens serão zerados.`)) return;
     const divergentSkus = new Set(divergentRows.map((item) => item.sku));
     const nextDraft = draft.map((item) => divergentSkus.has(item.sku)
-      ? { ...item, counted: 0, damaged: 0, other: 0 }
+      ? { ...item, counted: 0, assistance: 0, damaged: 0, other: 0 }
       : item);
     setDraft(nextDraft);
     setCountFilter("pending");
@@ -2058,20 +2070,21 @@ function Counting({
     const sku = normalizeInventorySku(manualProduct.sku);
     const system = Number.parseInt(manualProduct.system || "0", 10);
     const counted = Number.parseInt(manualProduct.counted || "0", 10);
+    const assistance = Number.parseInt(manualProduct.assistance || "0", 10);
     const damaged = Number.parseInt(manualProduct.damaged || "0", 10);
     const other = Number.parseInt(manualProduct.other || "0", 10);
     if (!/^\d{4,8}\.\d{1,3}\.\d{1,3}$/.test(sku)) {
       window.alert("Informe o SKU no formato produto.gradeX.gradeY. Exemplo: 76331.3.4.");
       return;
     }
-    if ([system, counted, damaged, other].some((value) => value < 0 || Number.isNaN(value))) {
+    if ([system, counted, assistance, damaged, other].some((value) => value < 0 || Number.isNaN(value))) {
       window.alert("Informe quantidades válidas.");
       return;
     }
     setSavingManual(true);
     try {
-      await onAddProduct({ sku, system, counted, damaged, other });
-      setManualProduct({ sku: "", system: "", counted: "", damaged: "", other: "" });
+      await onAddProduct({ sku, description: manualProduct.description.trim(), system, counted, assistance, damaged, other });
+      setManualProduct({ sku: "", description: "", system: "", counted: "", assistance: "", damaged: "", other: "" });
       setManualOpen(false);
     } catch (error) {
       window.alert(error.message);
@@ -2094,7 +2107,7 @@ function Counting({
       return null;
     }
     setSearchCode(match.sku);
-    setSearchMessage(`Encontrado: ${match.sku} - saldo do sistema ${match.system}.`);
+    setSearchMessage(`Encontrado: ${match.sku} - ${match.description || "produto sem descrição"} - saldo ${match.system}.`);
     playFeedback(true);
     if (focus) {
       window.setTimeout(() => {
@@ -2120,19 +2133,20 @@ function Counting({
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
     const rows = draft.map((item) => {
-      const accounted = countAccounted(item);
+      const [code, color, voltage] = String(item.sku).split(".");
       const difference = countDifference(item);
-      const statusLabel = difference === 0 ? "Conforme" : accounted > 0 ? "Divergente" : "Pendente";
       return `
         <tr>
-          <td>${escapeCell(item.sku)}</td>
-          <td>${item.system}</td>
+          <td>${escapeCell(code)}</td>
+          <td>${escapeCell(color)}</td>
+          <td>${escapeCell(voltage)}</td>
+          <td>${escapeCell(item.description)}</td>
           <td>${item.counted}</td>
+          <td>${item.assistance}</td>
           <td>${item.damaged}</td>
           <td>${item.other}</td>
-          <td>${accounted}</td>
+          <td>${item.system}</td>
           <td>${difference}</td>
-          <td>${statusLabel}</td>
         </tr>`;
     }).join("");
     const html = `<!doctype html>
@@ -2160,14 +2174,16 @@ function Counting({
         <table>
           <thead>
             <tr>
-              <th>SKU</th>
-              <th>Sistema</th>
-              <th>Contado</th>
+              <th>Código</th>
+              <th>Cor</th>
+              <th>Voltagem</th>
+              <th>Produto</th>
+              <th>Contagem</th>
+              <th>Assist.</th>
               <th>Avaria</th>
               <th>Outros</th>
-              <th>Apurado</th>
+              <th>Saldo</th>
               <th>Diferença</th>
-              <th>Status</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -2213,6 +2229,7 @@ function Counting({
   const printableDraft = printMode === "balance" ? draft : printFilter === "counted" ? countedItems : visibleDraft;
   const printTotalSystem = printableDraft.reduce((sum, item) => sum + item.system, 0);
   const printTotalCounted = printableDraft.reduce((sum, item) => sum + item.counted, 0);
+  const printTotalAssistance = printableDraft.reduce((sum, item) => sum + item.assistance, 0);
   const printTotalDamaged = printableDraft.reduce((sum, item) => sum + item.damaged, 0);
   const printTotalOther = printableDraft.reduce((sum, item) => sum + item.other, 0);
   const printTotalAccounted = printableDraft.reduce((sum, item) => sum + countAccounted(item), 0);
@@ -2319,6 +2336,11 @@ function Counting({
             }, "Exportar Excel"),
             h("span", { className: "count-more-actions-divider" }),
             h("button", {
+              className: "secondary-action compact",
+              disabled: !draft.length || savingCount,
+              onClick: () => resetCount("counted")
+            }, "Zerar somente contagem"),
+            h("button", {
               className: "danger-action compact",
               disabled: !divergentRows.length || savingCount,
               onClick: recountDivergent
@@ -2326,8 +2348,8 @@ function Counting({
             h("button", {
               className: "danger-action compact",
               disabled: !draft.length || savingCount,
-              onClick: resetCount
-            }, "Reiniciar contagem")
+              onClick: () => resetCount("all")
+            }, "Zerar tudo")
           )
         )
       ),
@@ -2389,9 +2411,13 @@ function Counting({
       visibleDraft.length ? h("div", { className: "table-wrap count-table-wrap" },
         h("table", null,
           h("thead", null, h("tr", null,
-            h("th", null, "SKU"),
-            h("th", null, "Sistema"),
-            h("th", null, "Contado"),
+            h("th", null, "Código"),
+            h("th", null, "Cor"),
+            h("th", null, "Voltagem"),
+            h("th", null, "Produto"),
+            h("th", null, "Saldo"),
+            h("th", null, "Contagem"),
+            h("th", null, "Assist."),
             h("th", null, "Avaria"),
             h("th", null, "Outros"),
             h("th", null, "Diferença")
@@ -2404,7 +2430,10 @@ function Counting({
               searchDigits && String(item.sku).replace(/\D/g, "") === searchDigits ? "count-row-found" : ""
             ].filter(Boolean).join(" ")
           },
-            h("td", null, item.sku),
+            h("td", null, String(item.sku).split(".")[0]),
+            h("td", null, String(item.sku).split(".")[1] || "—"),
+            h("td", null, String(item.sku).split(".")[2] || "—"),
+            h("td", { className: "count-product-description" }, item.description || "Produto sem descrição"),
             h("td", null, item.system),
             h("td", null, h("input", {
               className: "count-input",
@@ -2415,6 +2444,13 @@ function Counting({
                 if (element) countInputRefs.current[item.sku] = element;
               },
               onChange: (event) => changeCountField(item.sku, "counted", event.target.value)
+            })),
+            h("td", null, h("input", {
+              className: "count-input",
+              type: "number",
+              min: "0",
+              value: item.assistance,
+              onChange: (event) => changeCountField(item.sku, "assistance", event.target.value)
             })),
             h("td", null, h("input", {
               className: "count-input",
@@ -2461,6 +2497,14 @@ function Counting({
           "Use esta opção quando o PDF não trouxe um item corretamente. O produto será salvo no PostgreSQL e aparecerá para todos."
         ),
         h("label", null,
+          h("span", null, "Descrição do produto"),
+          h("input", {
+            value: manualProduct.description,
+            placeholder: "Ex.: FERRO DE PASSAR A SECO...",
+            onChange: (event) => setManualProduct((current) => ({ ...current, description: event.target.value }))
+          })
+        ),
+        h("label", null,
           h("span", null, "SKU"),
           h("input", {
             ref: manualSkuRef,
@@ -2487,6 +2531,15 @@ function Counting({
               min: "0",
               value: manualProduct.counted,
               onChange: (event) => setManualProduct((current) => ({ ...current, counted: event.target.value }))
+            })
+          ),
+          h("label", null,
+            h("span", null, "Assistência"),
+            h("input", {
+              type: "number",
+              min: "0",
+              value: manualProduct.assistance,
+              onChange: (event) => setManualProduct((current) => ({ ...current, assistance: event.target.value }))
             })
           ),
           h("label", null,
@@ -2553,6 +2606,7 @@ function Counting({
         h("div", null, h("span", null, "SKUs"), h("strong", null, printableDraft.length)),
         h("div", null, h("span", null, "Saldo do sistema"), h("strong", null, printTotalSystem)),
         h("div", null, h("span", null, "Total contado"), h("strong", null, printTotalCounted)),
+        h("div", null, h("span", null, "Assistência"), h("strong", null, printTotalAssistance)),
         h("div", null, h("span", null, "Avaria"), h("strong", null, printTotalDamaged)),
         h("div", null, h("span", null, "Outros"), h("strong", null, printTotalOther)),
         h("div", null, h("span", null, "Total apurado"), h("strong", null, printTotalAccounted)),
@@ -2560,39 +2614,46 @@ function Counting({
       ),
       h("table", { className: "count-print-table" },
         h("colgroup", null,
-          h("col", { className: "print-col-sku" }),
+          h("col", { className: "print-col-code" }),
+          h("col", { className: "print-col-grade" }),
+          h("col", { className: "print-col-grade" }),
+          h("col", { className: "print-col-product" }),
           h("col", { className: "print-col-qty" }),
           h("col", { className: "print-col-qty" }),
           h("col", { className: "print-col-qty" }),
           h("col", { className: "print-col-qty" }),
           h("col", { className: "print-col-qty" }),
-          h("col", { className: "print-col-diff" }),
-          h("col", { className: "print-col-status" })
+          h("col", { className: "print-col-diff" })
         ),
         h("thead", null,
           h("tr", null,
-            h("th", null, "SKU"),
-            h("th", null, "Sistema"),
-            h("th", null, "Cont."),
+            h("th", null, "Código"),
+            h("th", null, "Cor"),
+            h("th", null, "Volt."),
+            h("th", null, "Produto"),
+            h("th", null, "Contagem"),
+            h("th", null, "Assist."),
             h("th", null, "Avaria"),
             h("th", null, "Outros"),
-            h("th", null, "Apurado"),
-            h("th", null, "Dif."),
-            h("th", null, "Status")
+            h("th", null, "Saldo"),
+            h("th", null, "Dif.")
           )
         ),
         h("tbody", null, printableDraft.map((item) => {
           const accounted = countAccounted(item);
           const difference = countDifference(item);
+          const [code, color, voltage] = String(item.sku).split(".");
           return h("tr", { key: item.sku },
-            h("td", null, item.sku),
-            h("td", null, item.system),
+            h("td", null, code),
+            h("td", null, color || "—"),
+            h("td", null, voltage || "—"),
+            h("td", null, item.description || "Produto sem descrição"),
             h("td", null, item.counted),
+            h("td", null, item.assistance),
             h("td", null, item.damaged),
             h("td", null, item.other),
-            h("td", null, accounted),
-            h("td", null, difference > 0 ? `+${difference}` : difference),
-            h("td", null, difference === 0 ? "Conforme" : accounted > 0 ? "Divergente" : "Pendente")
+            h("td", null, item.system),
+            h("td", null, difference > 0 ? `+${difference}` : difference)
           );
         }))
       ),
@@ -3327,7 +3388,7 @@ class AppErrorBoundary extends React.Component {
   render() {
     if (!this.state.error) return this.props.children;
     return h("main", { className: "fatal-error" },
-      h("img", { className: "app-logo", src: "/logo.png?v=2000", alt: "MN - Check" }),
+      h("img", { className: "app-logo", src: "/logo.png?v=2120", alt: "MN - Check" }),
       h("p", { className: "eyebrow" }, "Falha de interface"),
       h("h1", null, "Não foi possível concluir esta operação"),
       h("p", null, "Seus dados persistidos não foram apagados. Recarregue a tela para continuar."),
