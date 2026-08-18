@@ -147,7 +147,7 @@ function App() {
         refreshing = true;
         window.location.reload();
       });
-      navigator.serviceWorker.register("/sw.js?v=2204")
+      navigator.serviceWorker.register("/sw.js?v=2205")
         .then((registration) => {
           if (registration.waiting && navigator.serviceWorker.controller) {
             setWaitingWorker(registration.waiting);
@@ -833,7 +833,7 @@ function App() {
       }),
       h("section", { className: "brand-panel" },
         h("div", { className: "brand-content" },
-          h("img", { className: "app-logo hero-logo", src: "/logo.png?v=2204", alt: "MN - Check" }),
+          h("img", { className: "app-logo hero-logo", src: "/logo.png?v=2205", alt: "MN - Check" }),
           h("p", { className: "eyebrow" }, "conferência operacional"),
           h("h1", null, "MN - Check"),
           h("p", null, "Controle de separação, conferência e estoque."),
@@ -895,7 +895,7 @@ function App() {
     }),
     h("aside", { className: "sidebar", "aria-label": "Navegação principal" },
       h("div", { className: "sidebar-brand" },
-        h("img", { className: "app-logo small", src: "/logo.png?v=2204", alt: "MN - Check" }),
+        h("img", { className: "app-logo small", src: "/logo.png?v=2205", alt: "MN - Check" }),
         h("div", { className: "sidebar-brand-copy" },
           h("strong", null, "MN - Check"),
           h("small", { className: "sidebar-version" }, `Versão ${appVersion}`)
@@ -1990,6 +1990,8 @@ function Counting({
   const [countExpressions, setCountExpressions] = React.useState({});
   const [countFilter, setCountFilter] = React.useState("all");
   const [printFilter, setPrintFilter] = React.useState("counted");
+  const [countFilterOpen, setCountFilterOpen] = React.useState(false);
+  const [printFilterOpen, setPrintFilterOpen] = React.useState(false);
   const [balanceActionsOpen, setBalanceActionsOpen] = React.useState(false);
   const [moreActionsOpen, setMoreActionsOpen] = React.useState(false);
   const [manualOpen, setManualOpen] = React.useState(false);
@@ -2330,6 +2332,19 @@ function Counting({
   const pendingItems = draft.filter((item) => !hasCountMovement(item));
   const totalSystem = draft.reduce((sum, item) => sum + item.system, 0);
   const divergentItems = divergentRows.length;
+  const countFilterOptions = [
+    { value: "all", label: "Todos", count: draft.length },
+    { value: "counted", label: "Já contados", count: countedItems.length },
+    { value: "ok", label: "Conformes", count: compliantItems.length },
+    { value: "divergent", label: "Somente divergentes", count: divergentItems },
+    { value: "pending", label: "Somente não contados", count: pendingItems.length }
+  ];
+  const selectedCountFilter = countFilterOptions.find((option) => option.value === countFilter) || countFilterOptions[0];
+  const printFilterOptions = [
+    { value: "counted", label: "Somente produtos contados" },
+    { value: "visible", label: "Somente filtro atual" }
+  ];
+  const selectedPrintFilter = printFilterOptions.find((option) => option.value === printFilter) || printFilterOptions[0];
   const searchTerm = normalizeProductSearch(searchCode);
   const searchDigits = searchCode.replace(/\D/g, "");
   const filteredDraft = draft.filter((item) => {
@@ -2473,27 +2488,70 @@ function Counting({
         )
       ),
       draft.length && h("section", { className: "count-status-filter" },
-        h("label", { className: "count-filter-control" },
+        h("div", { className: "count-filter-control" },
           h("span", null, "Exibir"),
-          h("select", {
-            value: countFilter,
-            onChange: (event) => setCountFilter(event.target.value)
-          },
-            h("option", { value: "all" }, `Todos (${draft.length})`),
-            h("option", { value: "counted" }, `Já contados (${countedItems.length})`),
-            h("option", { value: "ok" }, `Conformes (${compliantItems.length})`),
-            h("option", { value: "divergent" }, `Somente divergentes (${divergentItems})`),
-            h("option", { value: "pending" }, `Somente não contados (${pendingItems.length})`)
+          h("div", { className: "filter-select" },
+            h("button", {
+              type: "button",
+              className: `filter-select-trigger ${countFilterOpen ? "open" : ""}`,
+              "aria-haspopup": "listbox",
+              "aria-expanded": countFilterOpen,
+              onClick: () => {
+                setCountFilterOpen((current) => !current);
+                setPrintFilterOpen(false);
+              }
+            },
+              h("span", { className: "filter-select-value" }, selectedCountFilter.label),
+              h("strong", { className: "filter-select-count" }, selectedCountFilter.count),
+              h("span", { className: "filter-select-chevron", "aria-hidden": "true" }, "⌄")
+            ),
+            countFilterOpen && h("div", { className: "filter-select-menu", role: "listbox", "aria-label": "Filtrar produtos" },
+              countFilterOptions.map((option) => h("button", {
+                key: option.value,
+                type: "button",
+                role: "option",
+                "aria-selected": countFilter === option.value,
+                className: `filter-select-option ${countFilter === option.value ? "active" : ""}`,
+                onClick: () => {
+                  setCountFilter(option.value);
+                  setCountFilterOpen(false);
+                }
+              },
+                h("span", null, option.label),
+                h("strong", null, option.count)
+              ))
+            )
           )
         ),
-        h("label", { className: "print-scope-control" },
+        h("div", { className: "print-scope-control" },
           h("span", null, "Impressão"),
-          h("select", {
-            value: printFilter,
-            onChange: (event) => setPrintFilter(event.target.value)
-          },
-            h("option", { value: "counted" }, "Somente produtos contados"),
-            h("option", { value: "visible" }, "Somente filtro atual")
+          h("div", { className: "filter-select" },
+            h("button", {
+              type: "button",
+              className: `filter-select-trigger ${printFilterOpen ? "open" : ""}`,
+              "aria-haspopup": "listbox",
+              "aria-expanded": printFilterOpen,
+              onClick: () => {
+                setPrintFilterOpen((current) => !current);
+                setCountFilterOpen(false);
+              }
+            },
+              h("span", { className: "filter-select-value" }, selectedPrintFilter.label),
+              h("span", { className: "filter-select-chevron", "aria-hidden": "true" }, "⌄")
+            ),
+            printFilterOpen && h("div", { className: "filter-select-menu", role: "listbox", "aria-label": "Escopo da impressão" },
+              printFilterOptions.map((option) => h("button", {
+                key: option.value,
+                type: "button",
+                role: "option",
+                "aria-selected": printFilter === option.value,
+                className: `filter-select-option ${printFilter === option.value ? "active" : ""}`,
+                onClick: () => {
+                  setPrintFilter(option.value);
+                  setPrintFilterOpen(false);
+                }
+              }, h("span", null, option.label)))
+            )
           )
         )
       ),
@@ -3526,7 +3584,7 @@ class AppErrorBoundary extends React.Component {
   render() {
     if (!this.state.error) return this.props.children;
     return h("main", { className: "fatal-error" },
-      h("img", { className: "app-logo", src: "/logo.png?v=2204", alt: "MN - Check" }),
+      h("img", { className: "app-logo", src: "/logo.png?v=2205", alt: "MN - Check" }),
       h("p", { className: "eyebrow" }, "Falha de interface"),
       h("h1", null, "Não foi possível concluir esta operação"),
       h("p", null, "Seus dados persistidos não foram apagados. Recarregue a tela para continuar."),

@@ -5285,11 +5285,119 @@ input[type="number"] {
 .count-filter-control,
 .print-scope-control {
   min-width: 0;
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
-.count-filter-control select,
-.print-scope-control select {
+.count-status-filter .print-scope-control {
+  margin-top: 0;
+}
+
+.filter-select {
+  position: relative;
   width: 100%;
+}
+
+.filter-select-trigger {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px 0 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--input-bg, var(--panel)) 94%, transparent);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-align: left;
+  text-transform: none;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.filter-select-trigger:hover,
+.filter-select-trigger.open {
+  border-color: color-mix(in srgb, var(--red-600) 70%, var(--line));
+  background: color-mix(in srgb, var(--red-600) 7%, var(--input-bg, var(--panel)));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--red-600) 10%, transparent);
+}
+
+.filter-select-value {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-select-count,
+.filter-select-option strong {
+  min-width: 30px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--red-600) 12%, var(--panel));
+  color: var(--red-600);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.filter-select-chevron {
+  color: var(--muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  transform: translateY(-2px);
+  transition: transform 160ms ease;
+}
+
+.filter-select-trigger.open .filter-select-chevron {
+  transform: rotate(180deg) translateY(-2px);
+}
+
+.filter-select-menu {
+  position: absolute;
+  z-index: 45;
+  top: calc(100% + 7px);
+  right: 0;
+  left: 0;
+  padding: 6px;
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+  text-transform: none;
+}
+
+.filter-select-option {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.filter-select-option:hover {
+  background: color-mix(in srgb, var(--red-600) 8%, var(--panel));
+}
+
+.filter-select-option.active {
+  background: color-mix(in srgb, var(--red-600) 14%, var(--panel));
+  color: var(--red-600);
 }
 
 .counting-layout {
