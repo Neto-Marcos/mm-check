@@ -192,9 +192,10 @@ public final class PostgresDatabase {
     }
     String upsert = """
         INSERT INTO estoque_produtos
-          (sku, saldo_sistema, saldo_contado, saldo_avaria, saldo_outros, ativo, ultima_atualizacao, importacao_id)
-        VALUES (?, ?, 0, 0, 0, TRUE, now(), ?)
+          (sku, descricao, saldo_sistema, saldo_contado, saldo_assistencia, saldo_avaria, saldo_outros, ativo, ultima_atualizacao, importacao_id)
+        VALUES (?, ?, ?, 0, 0, 0, 0, TRUE, now(), ?)
         ON CONFLICT (sku) DO UPDATE SET
+          descricao = EXCLUDED.descricao,
           saldo_sistema = EXCLUDED.saldo_sistema,
           ativo = TRUE,
           ultima_atualizacao = now(),
@@ -203,8 +204,9 @@ public final class PostgresDatabase {
     try (PreparedStatement statement = connection.prepareStatement(upsert)) {
       for (BalanceRow balance : balances) {
         statement.setString(1, balance.sku());
-        statement.setInt(2, balance.balance());
-        statement.setLong(3, importId);
+        statement.setString(2, balance.description());
+        statement.setInt(3, balance.balance());
+        statement.setLong(4, importId);
         statement.addBatch();
       }
       statement.executeBatch();
@@ -219,8 +221,8 @@ public final class PostgresDatabase {
         """;
     String insertItem = """
         INSERT INTO itens_contagem
-          (contagem_id, sku, saldo_sistema, quantidade_contada, quantidade_avaria, quantidade_outros, diferenca)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+          (contagem_id, sku, saldo_sistema, quantidade_contada, quantidade_assistencia, quantidade_avaria, quantidade_outros, diferenca)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """;
     try (Connection connection = connect()) {
       connection.setAutoCommit(false);
@@ -240,9 +242,10 @@ public final class PostgresDatabase {
             statement.setString(2, row.sku());
             statement.setInt(3, row.systemBalance());
             statement.setInt(4, row.countedQuantity());
-            statement.setInt(5, row.damagedQuantity());
-            statement.setInt(6, row.otherQuantity());
-            statement.setInt(7, row.accountedQuantity() - row.systemBalance());
+            statement.setInt(5, row.assistanceQuantity());
+            statement.setInt(6, row.damagedQuantity());
+            statement.setInt(7, row.otherQuantity());
+            statement.setInt(8, row.accountedQuantity() - row.systemBalance());
             statement.addBatch();
           }
           statement.executeBatch();
@@ -250,6 +253,7 @@ public final class PostgresDatabase {
         String updateInventory = """
             UPDATE estoque_produtos
             SET saldo_contado = ?,
+                saldo_assistencia = ?,
                 saldo_avaria = ?,
                 saldo_outros = ?,
                 ultima_contagem_em = now(),
@@ -259,9 +263,10 @@ public final class PostgresDatabase {
         try (PreparedStatement statement = connection.prepareStatement(updateInventory)) {
           for (CountRow row : rows) {
             statement.setInt(1, row.countedQuantity());
-            statement.setInt(2, row.damagedQuantity());
-            statement.setInt(3, row.otherQuantity());
-            statement.setString(4, row.sku());
+            statement.setInt(2, row.assistanceQuantity());
+            statement.setInt(3, row.damagedQuantity());
+            statement.setInt(4, row.otherQuantity());
+            statement.setString(5, row.sku());
             statement.addBatch();
           }
           statement.executeBatch();
@@ -317,7 +322,7 @@ public final class PostgresDatabase {
 
     List<CountRow> rows = new ArrayList<>();
     String sql = """
-        SELECT sku, saldo_sistema, saldo_contado, saldo_avaria, saldo_outros
+        SELECT sku, descricao, saldo_sistema, saldo_contado, saldo_assistencia, saldo_avaria, saldo_outros
         FROM estoque_produtos
         WHERE ativo = TRUE
         ORDER BY sku
@@ -329,8 +334,10 @@ public final class PostgresDatabase {
           String sku = result.getString("sku");
           rows.add(new CountRow(
               sku,
+              result.getString("descricao"),
               result.getInt("saldo_sistema"),
               result.getInt("saldo_contado"),
+              result.getInt("saldo_assistencia"),
               result.getInt("saldo_avaria"),
               result.getInt("saldo_outros")
           ));
@@ -344,8 +351,10 @@ public final class PostgresDatabase {
 
   public ImportSummary saveManualBalanceProduct(
       String sku,
+      String description,
       int systemBalance,
       int countedQuantity,
+      int assistanceQuantity,
       int damagedQuantity,
       int otherQuantity,
       String operator
@@ -364,11 +373,13 @@ public final class PostgresDatabase {
         """;
     String upsertInventorySql = """
         INSERT INTO estoque_produtos
-          (sku, saldo_sistema, saldo_contado, saldo_avaria, saldo_outros, ativo, ultima_atualizacao, ultima_contagem_em, importacao_id)
-        VALUES (?, ?, ?, ?, ?, TRUE, now(), now(), ?)
+          (sku, descricao, saldo_sistema, saldo_contado, saldo_assistencia, saldo_avaria, saldo_outros, ativo, ultima_atualizacao, ultima_contagem_em, importacao_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, now(), now(), ?)
         ON CONFLICT (sku) DO UPDATE SET
+          descricao = EXCLUDED.descricao,
           saldo_sistema = EXCLUDED.saldo_sistema,
           saldo_contado = EXCLUDED.saldo_contado,
+          saldo_assistencia = EXCLUDED.saldo_assistencia,
           saldo_avaria = EXCLUDED.saldo_avaria,
           saldo_outros = EXCLUDED.saldo_outros,
           ativo = TRUE,
@@ -405,11 +416,13 @@ public final class PostgresDatabase {
         }
         try (PreparedStatement statement = connection.prepareStatement(upsertInventorySql)) {
           statement.setString(1, sku);
-          statement.setInt(2, systemBalance);
-          statement.setInt(3, countedQuantity);
-          statement.setInt(4, damagedQuantity);
-          statement.setInt(5, otherQuantity);
-          statement.setLong(6, importId);
+          statement.setString(2, safeText(description, "Produto " + sku));
+          statement.setInt(3, systemBalance);
+          statement.setInt(4, countedQuantity);
+          statement.setInt(5, assistanceQuantity);
+          statement.setInt(6, damagedQuantity);
+          statement.setInt(7, otherQuantity);
+          statement.setLong(8, importId);
           statement.executeUpdate();
         }
         try (PreparedStatement statement = connection.prepareStatement("""
@@ -433,6 +446,17 @@ public final class PostgresDatabase {
     } catch (SQLException error) {
       throw new DatabaseException("Não foi possível adicionar o produto manualmente.", error);
     }
+  }
+
+  public ImportSummary saveManualBalanceProduct(
+      String sku,
+      int systemBalance,
+      int countedQuantity,
+      int damagedQuantity,
+      int otherQuantity,
+      String operator
+  ) {
+    return saveManualBalanceProduct(sku, "", systemBalance, countedQuantity, 0, damagedQuantity, otherQuantity, operator);
   }
 
   private Instant latestImportTimestamp(Connection connection, long importId) throws SQLException {
@@ -981,6 +1005,7 @@ public final class PostgresDatabase {
           sku VARCHAR(64) NOT NULL,
           saldo_sistema INTEGER NOT NULL CHECK (saldo_sistema >= 0),
           quantidade_contada INTEGER NOT NULL CHECK (quantidade_contada >= 0),
+          quantidade_assistencia INTEGER NOT NULL DEFAULT 0 CHECK (quantidade_assistencia >= 0),
           quantidade_avaria INTEGER NOT NULL DEFAULT 0 CHECK (quantidade_avaria >= 0),
           quantidade_outros INTEGER NOT NULL DEFAULT 0 CHECK (quantidade_outros >= 0),
           diferenca INTEGER NOT NULL,
@@ -989,6 +1014,7 @@ public final class PostgresDatabase {
         """,
         "ALTER TABLE itens_contagem ADD COLUMN IF NOT EXISTS quantidade_avaria INTEGER NOT NULL DEFAULT 0 CHECK (quantidade_avaria >= 0)",
         "ALTER TABLE itens_contagem ADD COLUMN IF NOT EXISTS quantidade_outros INTEGER NOT NULL DEFAULT 0 CHECK (quantidade_outros >= 0)",
+        "ALTER TABLE itens_contagem ADD COLUMN IF NOT EXISTS quantidade_assistencia INTEGER NOT NULL DEFAULT 0 CHECK (quantidade_assistencia >= 0)",
         """
         CREATE TABLE IF NOT EXISTS historico_scanner (
           id BIGSERIAL PRIMARY KEY,
@@ -1005,8 +1031,10 @@ public final class PostgresDatabase {
         """
         CREATE TABLE IF NOT EXISTS estoque_produtos (
           sku VARCHAR(64) PRIMARY KEY,
+          descricao TEXT NOT NULL DEFAULT '',
           saldo_sistema INTEGER NOT NULL CHECK (saldo_sistema >= 0),
           saldo_contado INTEGER NOT NULL DEFAULT 0 CHECK (saldo_contado >= 0),
+          saldo_assistencia INTEGER NOT NULL DEFAULT 0 CHECK (saldo_assistencia >= 0),
           saldo_avaria INTEGER NOT NULL DEFAULT 0 CHECK (saldo_avaria >= 0),
           saldo_outros INTEGER NOT NULL DEFAULT 0 CHECK (saldo_outros >= 0),
           ativo BOOLEAN NOT NULL DEFAULT TRUE,
@@ -1017,6 +1045,8 @@ public final class PostgresDatabase {
         """,
         "ALTER TABLE estoque_produtos ADD COLUMN IF NOT EXISTS saldo_avaria INTEGER NOT NULL DEFAULT 0 CHECK (saldo_avaria >= 0)",
         "ALTER TABLE estoque_produtos ADD COLUMN IF NOT EXISTS saldo_outros INTEGER NOT NULL DEFAULT 0 CHECK (saldo_outros >= 0)",
+        "ALTER TABLE estoque_produtos ADD COLUMN IF NOT EXISTS descricao TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE estoque_produtos ADD COLUMN IF NOT EXISTS saldo_assistencia INTEGER NOT NULL DEFAULT 0 CHECK (saldo_assistencia >= 0)",
         """
         CREATE TABLE IF NOT EXISTS conferencias (
           id BIGSERIAL PRIMARY KEY,
@@ -1108,16 +1138,26 @@ public final class PostgresDatabase {
     return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
   }
 
-  public record BalanceRow(String sku, int balance) {}
+  public record BalanceRow(String sku, String description, int balance) {
+    public BalanceRow(String sku, int balance) {
+      this(sku, "", balance);
+    }
+  }
   public record CountRow(
       String sku,
+      String description,
       int systemBalance,
       int countedQuantity,
+      int assistanceQuantity,
       int damagedQuantity,
       int otherQuantity
   ) {
+    public CountRow(String sku, int systemBalance, int countedQuantity, int damagedQuantity, int otherQuantity) {
+      this(sku, "", systemBalance, countedQuantity, 0, damagedQuantity, otherQuantity);
+    }
+
     int accountedQuantity() {
-      return countedQuantity + damagedQuantity + otherQuantity;
+      return countedQuantity + assistanceQuantity + damagedQuantity + otherQuantity;
     }
   }
   public record ImportSummary(

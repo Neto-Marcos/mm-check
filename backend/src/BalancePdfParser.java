@@ -124,7 +124,8 @@ final class BalancePdfParser {
         }
 
         String sku = product + "." + gradeX + "." + gradeY;
-        Row row = new Row(sku, balance, page.number, text);
+        String description = columns.description().trim().replaceAll("\\s+", " ");
+        Row row = new Row(sku, description, balance, page.number, text);
         Row previous = unique.get(sku);
         if (previous == null) {
           unique.put(sku, row);
@@ -135,6 +136,7 @@ final class BalancePdfParser {
           int consolidatedBalance = previous.balance + balance;
           unique.put(sku, new Row(
               sku,
+              previous.description.isBlank() ? description : previous.description,
               consolidatedBalance,
               previous.page,
               previous.sourceLine + " | " + text
@@ -426,7 +428,7 @@ final class BalancePdfParser {
         .toLowerCase(Locale.ROOT);
   }
 
-  record Row(String sku, int balance, int page, String sourceLine) {}
+  record Row(String sku, String description, int balance, int page, String sourceLine) {}
 
   record Metrics(
       int pagesProcessed,
@@ -518,23 +520,41 @@ final class BalancePdfParser {
 
     List<Word> words() {
       List<Word> result = new ArrayList<>();
-      StringBuilder current = new StringBuilder();
-      float startX = 0;
+      List<Glyph> current = new ArrayList<>();
       Glyph previous = null;
       for (Glyph glyph : glyphs) {
         boolean separator = glyph.text.isBlank() || (previous != null && shouldAddSpace(previous, glyph));
         if (separator && !current.isEmpty()) {
-          result.add(new Word(current.toString(), startX));
-          current.setLength(0);
+          addHeaderAwareWords(result, current);
+          current.clear();
         }
-        if (!glyph.text.isBlank()) {
-          if (current.isEmpty()) startX = glyph.x;
-          current.append(glyph.text);
-        }
+        if (!glyph.text.isBlank()) current.add(glyph);
         previous = glyph;
       }
-      if (!current.isEmpty()) result.add(new Word(current.toString(), startX));
+      if (!current.isEmpty()) addHeaderAwareWords(result, current);
       return result;
+    }
+
+    private static void addHeaderAwareWords(List<Word> result, List<Glyph> wordGlyphs) {
+      String text = wordGlyphs.stream().map(Glyph::text).reduce("", String::concat);
+      String lower = text.toLowerCase(Locale.ROOT);
+      int gradeOffset = lower.indexOf("grade");
+      if (gradeOffset > 0 && normalize(text.substring(0, gradeOffset)).equals("produto")) {
+        result.add(new Word(text.substring(0, gradeOffset), wordGlyphs.get(0).x));
+        result.add(new Word(text.substring(gradeOffset), xAtCharacter(wordGlyphs, gradeOffset)));
+        return;
+      }
+      result.add(new Word(text, wordGlyphs.get(0).x));
+    }
+
+    private static float xAtCharacter(List<Glyph> wordGlyphs, int characterOffset) {
+      int consumed = 0;
+      for (Glyph glyph : wordGlyphs) {
+        int next = consumed + glyph.text.length();
+        if (characterOffset < next) return glyph.x;
+        consumed = next;
+      }
+      return wordGlyphs.get(wordGlyphs.size() - 1).x;
     }
 
     String between(float startX, float endX) {
@@ -681,7 +701,7 @@ final class BalancePdfParser {
           line.between(productCode, gradeX),
           line.between(gradeX, gradeY),
           line.between(gradeY, midpoint(gradeY, description)),
-          line.between(description, balance),
+          line.between(midpoint(gradeY, description), balance),
           line.between(balance, cost),
           extractedCost,
           extractedTotal

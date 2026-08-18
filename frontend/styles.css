@@ -1195,6 +1195,7 @@ select {
 }
 
 .count-actions {
+  position: relative;
   margin-bottom: 16px;
 }
 
@@ -1471,7 +1472,7 @@ select {
 
 .balance-search-controls {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto auto;
+  grid-template-columns: minmax(180px, 1fr);
   gap: 8px;
 }
 
@@ -1531,6 +1532,76 @@ select {
 
 .count-input:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--red-600) 18%, transparent);
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.count-more-actions {
+  position: static;
+}
+
+.count-more-actions > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.count-more-actions > summary::-webkit-details-marker {
+  display: none;
+}
+
+.count-more-actions-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(360px, 100%);
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-raised, var(--panel));
+  box-shadow: var(--shadow-lg);
+}
+
+.count-more-actions-menu .compact {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.count-more-actions-divider {
+  height: 1px;
+  margin: 2px 4px;
+  background: var(--line);
+}
+
+.divergence-list {
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.list-item.divergence-item {
+  min-height: 0;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.divergence-item span {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .count-print-sheet {
@@ -3233,8 +3304,8 @@ th + th {
 
 @media print {
   @page {
-    size: A4 landscape;
-    margin: 10mm;
+    size: A4 portrait;
+    margin: 9mm;
   }
 
   html,
@@ -3284,7 +3355,7 @@ th + th {
     color: #171214;
     background: #fff;
     font-family: Arial, sans-serif;
-    font-size: 9pt;
+    font-size: 8pt;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
@@ -3355,7 +3426,7 @@ th + th {
   .count-print-totals {
     margin-bottom: 10px;
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -3368,20 +3439,24 @@ th + th {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
-    font-size: 7.5pt;
+    font-size: 6.6pt;
   }
 
-  .count-print-table col.print-col-sku {
-    width: 24%;
+  .count-print-table col.print-col-code {
+    width: 10%;
+  }
+
+  .count-print-table col.print-col-grade {
+    width: 5%;
+  }
+
+  .count-print-table col.print-col-product {
+    width: 35%;
   }
 
   .count-print-table col.print-col-qty,
   .count-print-table col.print-col-diff {
-    width: 9%;
-  }
-
-  .count-print-table col.print-col-status {
-    width: 13%;
+    width: 7%;
   }
 
   .count-print-table thead {
@@ -3394,7 +3469,7 @@ th + th {
 
   .count-print-table th,
   .count-print-table td {
-    padding: 5px;
+    padding: 4px 3px;
     border: 1px solid #d8ced0;
     overflow-wrap: anywhere;
     line-height: 1.15;
@@ -3413,6 +3488,11 @@ th + th {
 
   .count-print-table th:first-child,
   .count-print-table td:first-child {
+    text-align: left;
+  }
+
+  .count-print-table th:nth-child(4),
+  .count-print-table td:nth-child(4) {
     text-align: left;
   }
 
@@ -5127,6 +5207,20 @@ th + th {
     box-shadow 140ms ease;
 }
 
+.count-table-wrap table {
+  min-width: 1180px;
+}
+
+.count-product-description {
+  min-width: 280px;
+  max-width: 420px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: normal;
+}
+
 .count-input {
   width: 86px;
   min-width: 76px;
@@ -5229,6 +5323,10 @@ th + th {
   .export-options {
     width: 100%;
     min-width: 0;
+  }
+
+  .count-more-actions-menu {
+    width: 100%;
   }
 
   .export-options {

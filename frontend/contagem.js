@@ -8,13 +8,14 @@ export function normalizeCountRows(rows) {
     ...item,
     system: safeQuantity(item.system),
     counted: safeQuantity(item.counted),
+    assistance: safeQuantity(item.assistance),
     damaged: safeQuantity(item.damaged),
     other: safeQuantity(item.other)
   }));
 }
 
 export function countAccounted(item) {
-  return safeQuantity(item.counted) + safeQuantity(item.damaged) + safeQuantity(item.other);
+  return safeQuantity(item.counted) + safeQuantity(item.assistance) + safeQuantity(item.damaged) + safeQuantity(item.other);
 }
 
 export function countDifference(item) {
