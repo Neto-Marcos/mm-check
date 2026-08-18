@@ -5311,8 +5311,8 @@ input[type="number"] {
   gap: 10px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: color-mix(in srgb, var(--input-bg, var(--panel)) 94%, transparent);
-  color: var(--text);
+  background: var(--panel-soft);
+  color: var(--ink);
   font-size: 0.9rem;
   font-weight: 800;
   text-align: left;
@@ -5323,7 +5323,7 @@ input[type="number"] {
 .filter-select-trigger:hover,
 .filter-select-trigger.open {
   border-color: color-mix(in srgb, var(--red-600) 70%, var(--line));
-  background: color-mix(in srgb, var(--red-600) 7%, var(--input-bg, var(--panel)));
+  background: color-mix(in srgb, var(--red-600) 7%, var(--panel-soft));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--red-600) 10%, transparent);
 }
 
@@ -5369,7 +5369,7 @@ input[type="number"] {
   gap: 3px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--panel);
+  background: var(--panel-raised, var(--panel));
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
   text-transform: none;
 }
@@ -5385,7 +5385,7 @@ input[type="number"] {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: var(--text);
+  color: var(--ink);
   font-size: 0.86rem;
   font-weight: 700;
   text-align: left;
