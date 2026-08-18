@@ -5302,6 +5302,11 @@ th + th {
     min-width: 0;
   }
 
+  .count-more-actions-menu {
+    right: 12px;
+    width: calc(100vw - 24px);
+  }
+
   .export-options {
     gap: 8px;
   }
