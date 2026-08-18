@@ -2925,7 +2925,11 @@ th + th {
     gap: 8px;
     overflow-x: auto;
     padding-bottom: 4px;
-    scrollbar-width: thin;
+    scrollbar-width: none;
+  }
+
+  .nav-list::-webkit-scrollbar {
+    display: none;
   }
 
   .nav-item {
@@ -3857,6 +3861,11 @@ th + th {
   .sidebar-collapsed .sidebar-user {
     padding-inline: 0;
     justify-content: center;
+  }
+
+  .sidebar-collapsed .nav-item .ui-icon,
+  .sidebar-collapsed .notification-action .ui-icon {
+    margin-inline: auto;
   }
 
   .sidebar-collapsed .notification-action strong {
@@ -5137,12 +5146,34 @@ th + th {
 }
 
 .count-table-wrap table {
-  min-width: 1180px;
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
 }
 
+.count-table-wrap {
+  overflow-x: hidden;
+}
+
+.count-table-wrap th,
+.count-table-wrap td {
+  padding: 9px 6px;
+}
+
+.count-table-wrap th:nth-child(1), .count-table-wrap td:nth-child(1) { width: 10%; }
+.count-table-wrap th:nth-child(2), .count-table-wrap td:nth-child(2) { width: 6%; }
+.count-table-wrap th:nth-child(3), .count-table-wrap td:nth-child(3) { width: 7%; }
+.count-table-wrap th:nth-child(4), .count-table-wrap td:nth-child(4) { width: 31%; }
+.count-table-wrap th:nth-child(5), .count-table-wrap td:nth-child(5) { width: 7%; }
+.count-table-wrap th:nth-child(6), .count-table-wrap td:nth-child(6),
+.count-table-wrap th:nth-child(7), .count-table-wrap td:nth-child(7),
+.count-table-wrap th:nth-child(8), .count-table-wrap td:nth-child(8),
+.count-table-wrap th:nth-child(9), .count-table-wrap td:nth-child(9) { width: 8%; }
+.count-table-wrap th:nth-child(10), .count-table-wrap td:nth-child(10) { width: 7%; }
+
 .count-product-description {
-  min-width: 280px;
-  max-width: 420px;
+  min-width: 0;
+  max-width: none;
   color: var(--text);
   font-size: 0.82rem;
   font-weight: 700;
@@ -5151,9 +5182,24 @@ th + th {
 }
 
 .count-input {
-  width: 86px;
-  min-width: 76px;
+  width: 100%;
+  min-width: 0;
+  padding-inline: 4px;
   text-align: center;
+}
+
+.count-input::-webkit-outer-spin-button,
+.count-input::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 
 .diff-ok,
@@ -5184,12 +5230,57 @@ th + th {
   }
 
   .count-input {
-    width: 74px;
+    width: 100%;
   }
 }
 
 .count-status-filter {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1fr);
   gap: 12px;
+}
+
+.count-filter-control,
+.print-scope-control {
+  min-width: 0;
+}
+
+.count-filter-control select,
+.print-scope-control select {
+  width: 100%;
+}
+
+.counting-layout {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.count-action-group {
+  position: relative;
+}
+
+.count-action-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 230px;
+  padding: 8px;
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+  box-shadow: 0 16px 35px rgba(0, 0, 0, 0.24);
+}
+
+.count-action-popover.wide {
+  width: 260px;
+}
+
+.count-action-popover .compact {
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
 }
 
 .count-filter-grid {
@@ -5243,6 +5334,21 @@ th + th {
 }
 
 @media (max-width: 680px) {
+  .count-status-filter {
+    grid-template-columns: 1fr;
+  }
+
+  .count-action-group {
+    width: 100%;
+  }
+
+  .count-action-popover,
+  .count-action-popover.wide {
+    position: static;
+    width: 100%;
+    margin-top: 8px;
+  }
+
   .count-filter-chip {
     flex: 1 1 130px;
     min-height: 40px;
@@ -5256,5 +5362,27 @@ th + th {
 
   .export-options {
     gap: 8px;
+  }
+}
+
+@media (max-width: 1050px) {
+  .count-table-wrap th,
+  .count-table-wrap td {
+    padding: 7px 4px;
+    font-size: 0.72rem;
+  }
+
+  .count-table-wrap th {
+    font-size: 0.62rem;
+    white-space: normal;
+  }
+
+  .count-product-description {
+    font-size: 0.72rem;
+  }
+
+  .count-input {
+    min-height: 36px;
+    font-size: 0.78rem;
   }
 }
