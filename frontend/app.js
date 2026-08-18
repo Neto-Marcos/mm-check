@@ -2313,7 +2313,11 @@ function Counting({
           ? "Salvando..."
           : online ? "Atualizar contagem" : "Salvar contagem off-line"),
         h("details", { className: "count-more-actions" },
-          h("summary", { className: "secondary-action compact" }, "Mais ações"),
+          h("summary", {
+            className: "secondary-action compact",
+            title: "Mais ações",
+            "aria-label": "Mais ações"
+          }, h("span", { className: "count-more-actions-icon", "aria-hidden": "true" }, "•••")),
           h("div", { className: "count-more-actions-menu" },
             h("button", {
               className: "secondary-action compact",
