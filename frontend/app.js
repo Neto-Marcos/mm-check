@@ -6,7 +6,8 @@ import {
   countDifference,
   hasCountMovement,
   normalizeCountRows,
-  safeQuantity
+  safeQuantity,
+  signedQuantity
 } from "./contagem.js";
 import { mapContentType, readFileAsDataUrl } from "./mapas.js";
 import {
@@ -147,7 +148,7 @@ function App() {
         refreshing = true;
         window.location.reload();
       });
-      navigator.serviceWorker.register("/sw.js?v=2206")
+      navigator.serviceWorker.register("/sw.js?v=2300")
         .then((registration) => {
           if (registration.waiting && navigator.serviceWorker.controller) {
             setWaitingWorker(registration.waiting);
@@ -833,7 +834,7 @@ function App() {
       }),
       h("section", { className: "brand-panel" },
         h("div", { className: "brand-content" },
-          h("img", { className: "app-logo hero-logo", src: "/logo.png?v=2206", alt: "MN - Check" }),
+          h("img", { className: "app-logo hero-logo", src: "/logo.png?v=2300", alt: "MN - Check" }),
           h("p", { className: "eyebrow" }, "conferência operacional"),
           h("h1", null, "MN - Check"),
           h("p", null, "Controle de separação, conferência e estoque."),
@@ -895,7 +896,7 @@ function App() {
     }),
     h("aside", { className: "sidebar", "aria-label": "Navegação principal" },
       h("div", { className: "sidebar-brand" },
-        h("img", { className: "app-logo small", src: "/logo.png?v=2206", alt: "MN - Check" }),
+        h("img", { className: "app-logo small", src: "/logo.png?v=2300", alt: "MN - Check" }),
         h("div", { className: "sidebar-brand-copy" },
           h("strong", null, "MN - Check"),
           h("small", { className: "sidebar-version" }, `Versão ${appVersion}`)
@@ -1940,12 +1941,15 @@ function matchesProductSearch(item, query) {
   }));
 }
 
-function evaluateCountExpression(value) {
+function evaluateCountExpression(value, allowNegative = false) {
   const expression = String(value || "").replace(/\s+/g, "");
   if (!expression) return 0;
-  if (!/^\d+(?:[+\-*/]\d+)*$/.test(expression)) return null;
-  const tokens = expression.match(/\d+|[+\-*/]/g) || [];
-  const values = [Number(tokens[0])];
+  const startsNegative = expression.startsWith("-");
+  const unsignedExpression = startsNegative ? expression.slice(1) : expression;
+  if (startsNegative && !allowNegative) return null;
+  if (!/^\d+(?:[+\-*/]\d+)*$/.test(unsignedExpression)) return null;
+  const tokens = unsignedExpression.match(/\d+|[+\-*/]/g) || [];
+  const values = [Number(tokens[0]) * (startsNegative ? -1 : 1)];
   const operators = [];
   for (let index = 1; index < tokens.length; index += 2) {
     const operator = tokens[index];
@@ -1963,7 +1967,7 @@ function evaluateCountExpression(value) {
   operators.forEach((operator, index) => {
     result = operator === "+" ? result + values[index + 1] : result - values[index + 1];
   });
-  return Number.isSafeInteger(result) && result >= 0 ? result : null;
+  return Number.isSafeInteger(result) && (allowNegative || result >= 0) ? result : null;
 }
 
 function Counting({
@@ -2055,7 +2059,7 @@ function Counting({
   }
 
   function changeCountField(sku, field, value) {
-    const amount = safeQuantity(value);
+    const amount = field === "other" ? signedQuantity(value) : safeQuantity(value);
     setDraft((current) => {
       const next = current.map((item) => item.sku === sku ? { ...item, [field]: amount } : item);
       if (!online || !navigator.onLine) {
@@ -2077,9 +2081,11 @@ function Counting({
   function commitCountExpression(sku, field, fallback) {
     const expression = countExpressions[sku]?.[field];
     if (expression == null) return;
-    const result = evaluateCountExpression(expression);
+    const result = evaluateCountExpression(expression, field === "other");
     if (result == null) {
-      window.alert("Conta inválida. Use números inteiros com +, -, * ou /. Exemplo: 90+23.");
+      window.alert(field === "other"
+        ? "Conta inválida. Em Outros, use inteiros ou contas como -60, 20-80, 10*3 ou 100/4."
+        : "Conta inválida. Use números inteiros com +, -, * ou /. Exemplo: 90+23.");
       setCountExpressions((current) => ({
         ...current,
         [sku]: { ...(current[sku] || {}), [field]: String(fallback) }
@@ -2117,7 +2123,7 @@ function Counting({
     setMoreActionsOpen(false);
     if (!draft.length || savingCount) return;
     const onlyCounted = mode === "counted";
-    const hasValues = draft.some((item) => onlyCounted ? item.counted > 0 : countAccounted(item) > 0);
+    const hasValues = draft.some((item) => onlyCounted ? item.counted > 0 : hasCountMovement(item));
     if (!hasValues) {
       window.alert(onlyCounted ? "A coluna Contagem já está zerada." : "A contagem já está zerada.");
       return;
@@ -2188,7 +2194,7 @@ function Counting({
       window.alert("Informe o SKU no formato produto.gradeX.gradeY. Exemplo: 76331.3.4.");
       return;
     }
-    if ([system, counted, assistance, damaged, other].some((value) => value < 0 || Number.isNaN(value))) {
+    if ([system, counted, assistance, damaged].some((value) => value < 0 || Number.isNaN(value)) || Number.isNaN(other)) {
       window.alert("Informe quantidades válidas.");
       return;
     }
@@ -2256,11 +2262,11 @@ function Counting({
           <td>${escapeCell(color)}</td>
           <td>${escapeCell(voltage)}</td>
           <td>${escapeCell(item.description)}</td>
+          <td>${item.system}</td>
           <td>${item.counted}</td>
           <td>${item.assistance}</td>
           <td>${item.damaged}</td>
           <td>${item.other}</td>
-          <td>${item.system}</td>
           <td>${difference}</td>
         </tr>`;
     }).join("");
@@ -2273,6 +2279,9 @@ function Counting({
           table { border-collapse: collapse; width: 100%; }
           th { background: #761b1d; color: #fff; }
           th, td { border: 1px solid #d8ced0; padding: 8px; text-align: left; }
+          th { text-align: center; }
+          th:nth-child(1), th:nth-child(4), td:nth-child(1), td:nth-child(4) { text-align: left; }
+          td:nth-child(2), td:nth-child(3), td:nth-child(n+5) { text-align: center; }
           .meta td { font-weight: bold; }
         </style>
       </head>
@@ -2293,11 +2302,11 @@ function Counting({
               <th>Cor</th>
               <th>Voltagem</th>
               <th>Produto</th>
+              <th>Saldo</th>
               <th>Contagem</th>
               <th>Assist.</th>
               <th>Avaria</th>
               <th>Outros</th>
-              <th>Saldo</th>
               <th>Diferença</th>
             </tr>
           </thead>
@@ -2762,7 +2771,6 @@ function Counting({
             h("span", null, "Outros"),
             h("input", {
               type: "number",
-              min: "0",
               value: manualProduct.other,
               onChange: (event) => setManualProduct((current) => ({ ...current, other: event.target.value }))
             })
@@ -2827,11 +2835,11 @@ function Counting({
             h("th", null, "Cor"),
             h("th", null, "Volt."),
             h("th", null, "Produto"),
+            h("th", null, "Saldo"),
             h("th", null, "Contagem"),
             h("th", null, "Assist."),
             h("th", null, "Avaria"),
             h("th", null, "Outros"),
-            h("th", null, "Saldo"),
             h("th", null, "Dif.")
           )
         ),
@@ -2844,11 +2852,11 @@ function Counting({
             h("td", null, color || "—"),
             h("td", null, voltage || "—"),
             h("td", null, item.description || "Produto sem descrição"),
+            h("td", null, item.system),
             h("td", null, item.counted),
             h("td", null, item.assistance),
             h("td", null, item.damaged),
             h("td", null, item.other),
-            h("td", null, item.system),
             h("td", null, difference > 0 ? `+${difference}` : difference)
           );
         }))
@@ -3584,7 +3592,7 @@ class AppErrorBoundary extends React.Component {
   render() {
     if (!this.state.error) return this.props.children;
     return h("main", { className: "fatal-error" },
-      h("img", { className: "app-logo", src: "/logo.png?v=2206", alt: "MN - Check" }),
+      h("img", { className: "app-logo", src: "/logo.png?v=2300", alt: "MN - Check" }),
       h("p", { className: "eyebrow" }, "Falha de interface"),
       h("h1", null, "Não foi possível concluir esta operação"),
       h("p", null, "Seus dados persistidos não foram apagados. Recarregue a tela para continuar."),

@@ -3380,16 +3380,16 @@ th + th {
   }
 
   .count-print-table col.print-col-grade {
-    width: 5%;
+    width: 6%;
   }
 
   .count-print-table col.print-col-product {
-    width: 35%;
+    width: 34%;
   }
 
   .count-print-table col.print-col-qty,
   .count-print-table col.print-col-diff {
-    width: 7%;
+    width: 7.333%;
   }
 
   .count-print-table thead {
@@ -3404,10 +3404,11 @@ th + th {
   .count-print-table td {
     padding: 4px 3px;
     border: 1px solid #d8ced0;
-    overflow-wrap: anywhere;
-    line-height: 1.15;
-    text-align: right;
+    overflow-wrap: normal;
+    line-height: 1.2;
+    text-align: center;
     vertical-align: middle;
+    font-variant-numeric: tabular-nums;
   }
 
   .count-print-table th {
@@ -3427,15 +3428,15 @@ th + th {
   .count-print-table th:nth-child(4),
   .count-print-table td:nth-child(4) {
     text-align: left;
-  }
-
-  .count-print-table th:last-child,
-  .count-print-table td:last-child {
-    text-align: left;
+    overflow-wrap: anywhere;
   }
 
   .count-print-table tbody tr:nth-child(even) {
     background: #f8f5f6;
+  }
+
+  .count-print-totals > div {
+    text-align: center;
   }
 
   .count-print-signatures {

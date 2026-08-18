@@ -184,8 +184,8 @@ public class MmCheckServer {
       if (!sku.matches("\\d{4,8}\\.\\d{1,3}\\.\\d{1,3}")) {
         throw new ApiException(400, "Informe o SKU no formato produto.gradeX.gradeY. Exemplo: 76331.3.4.");
       }
-      if (systemBalance < 0 || countedQuantity < 0 || assistanceQuantity < 0 || damagedQuantity < 0 || otherQuantity < 0) {
-        throw new ApiException(400, "As quantidades não podem ser negativas.");
+      if (systemBalance < 0 || countedQuantity < 0 || assistanceQuantity < 0 || damagedQuantity < 0) {
+        throw new ApiException(400, "Saldo, contagem, assistência e avaria não podem ser negativos.");
       }
       PostgresDatabase.ImportSummary summary = relationalDatabase.saveManualBalanceProduct(
           sku,
@@ -535,8 +535,8 @@ public class MmCheckServer {
         int assistance = optionalIntegerField(item, "assistance");
         int damaged = optionalIntegerField(item, "damaged");
         int other = optionalIntegerField(item, "other");
-        if (system < 0 || counted < 0 || assistance < 0 || damaged < 0 || other < 0) {
-          throw new ApiException(400, "As quantidades não podem ser negativas.");
+        if (system < 0 || counted < 0 || assistance < 0 || damaged < 0) {
+          throw new ApiException(400, "Saldo, contagem, assistência e avaria não podem ser negativos.");
         }
         String description = currentSnapshot.rows().stream()
             .filter(current -> current.sku().equals(sku))
