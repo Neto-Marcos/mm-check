@@ -1,9 +1,9 @@
-const CACHE_NAME = "mn-check-2.2.2";
+const CACHE_NAME = "mn-check-2.2.3";
 const APP_ASSETS = [
   "/",
   "/index.html",
-  "/styles.css?v=2202",
-  "/app.js?v=2202",
+  "/styles.css?v=2203",
+  "/app.js?v=2203",
   "/api.js",
   "/auth.js",
   "/conferencia.js",
@@ -12,10 +12,10 @@ const APP_ASSETS = [
   "/scanner.js",
   "/state.js",
   "/ui.js",
-  "/logo.png?v=2202",
-  "/icon-192.png?v=2202",
-  "/apple-touch-icon.png?v=2202",
-  "/manifest.webmanifest?v=2202",
+  "/logo.png?v=2203",
+  "/icon-192.png?v=2203",
+  "/apple-touch-icon.png?v=2203",
+  "/manifest.webmanifest?v=2203",
   "/vendor/react.production.min.js",
   "/vendor/react-dom.production.min.js"
 ];
