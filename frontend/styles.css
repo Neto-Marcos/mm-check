@@ -1471,7 +1471,7 @@ select {
 
 .balance-search-controls {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto auto;
+  grid-template-columns: minmax(180px, 1fr);
   gap: 8px;
 }
 
@@ -1531,6 +1531,77 @@ select {
 
 .count-input:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--red-600) 18%, transparent);
+}
+
+/* A contagem é digitada ou lida pelo coletor: os steppers ocupam espaço sem ajudar. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.count-more-actions {
+  position: relative;
+}
+
+.count-more-actions > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.count-more-actions > summary::-webkit-details-marker {
+  display: none;
+}
+
+.count-more-actions-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(320px, calc(100vw - 48px));
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-raised, var(--panel));
+  box-shadow: var(--shadow-lg);
+}
+
+.count-more-actions-menu .compact {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.count-more-actions-divider {
+  height: 1px;
+  margin: 2px 4px;
+  background: var(--line);
+}
+
+.divergence-list {
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.list-item.divergence-item {
+  min-height: 0;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.divergence-item span {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .count-print-sheet {

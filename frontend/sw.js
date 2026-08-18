@@ -1,9 +1,9 @@
-const CACHE_NAME = "mn-check-2.0.0";
+const CACHE_NAME = "mn-check-2.1.2";
 const APP_ASSETS = [
   "/",
   "/index.html",
-  "/styles.css?v=2000",
-  "/app.js?v=2000",
+  "/styles.css?v=2001",
+  "/app.js?v=2001",
   "/api.js",
   "/auth.js",
   "/conferencia.js",

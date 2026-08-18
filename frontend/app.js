@@ -1913,8 +1913,6 @@ function Counting({
   const [searchMessage, setSearchMessage] = React.useState("");
   const [countFilter, setCountFilter] = React.useState("all");
   const [printFilter, setPrintFilter] = React.useState("counted");
-  const [exportOpen, setExportOpen] = React.useState(false);
-  const [resetOpen, setResetOpen] = React.useState(false);
   const [manualOpen, setManualOpen] = React.useState(false);
   const [manualProduct, setManualProduct] = React.useState({ sku: "", system: "", counted: "", damaged: "", other: "" });
   const [savingManual, setSavingManual] = React.useState(false);
@@ -2000,7 +1998,6 @@ function Counting({
   }
 
   async function resetCount() {
-    setResetOpen(false);
     if (!draft.length || savingCount) return;
     const hasValues = draft.some((item) => countAccounted(item) > 0);
     if (!hasValues) {
@@ -2033,7 +2030,6 @@ function Counting({
   }
 
   async function recountDivergent() {
-    setResetOpen(false);
     if (!divergentRows.length || savingCount) return;
     if (!window.confirm(`Recontar ${divergentRows.length} itens divergentes? Os valores desses itens serão zerados.`)) return;
     const divergentSkus = new Set(divergentRows.map((item) => item.sku));
@@ -2190,12 +2186,10 @@ function Counting({
   }
 
   function exportPdf() {
-    setExportOpen(false);
     printCountReport();
   }
 
   function exportExcel() {
-    setExportOpen(false);
     exportBalanceExcel();
   }
 
@@ -2295,54 +2289,46 @@ function Counting({
       }),
       h("div", { className: "count-actions" },
         h("button", {
-          className: "secondary-action compact",
-          disabled: importing,
-          onClick: () => fileInputRef.current?.click()
-        }, importing ? "Lendo todas as folhas..." : "Selecionar PDF de saldo"),
-        h("button", {
-          className: "secondary-action compact",
-          onClick: () => setManualOpen(true)
-        }, "Adicionar produto"),
-        h("button", {
           className: "primary-action compact",
           disabled: !draft.length || savingCount,
           onClick: submitCount
         }, savingCount
           ? "Salvando..."
           : online ? "Atualizar contagem" : "Salvar contagem off-line"),
-        h("button", {
-          className: "secondary-action compact",
-          disabled: !draft.length || savingCount,
-          onClick: () => setResetOpen((current) => !current)
-        }, "Reiniciar contagem"),
-        resetOpen && h("div", { className: "export-options" },
-          h("button", {
-            className: "secondary-action compact",
-            disabled: !draft.length || savingCount,
-            onClick: resetCount
-          }, "Apagar tudo"),
-          h("button", {
-            className: "secondary-action compact",
-            disabled: !divergentRows.length || savingCount,
-            onClick: recountDivergent
-          }, "Apagar divergentes")
-        ),
-        h("button", {
-          className: "secondary-action compact",
-          disabled: !draft.length,
-          onClick: () => setExportOpen((current) => !current)
-        }, "Exportar"),
-        exportOpen && h("div", { className: "export-options" },
-          h("button", {
-            className: "secondary-action compact",
-            disabled: !draft.length,
-            onClick: exportPdf
-          }, "PDF"),
-          h("button", {
-            className: "secondary-action compact",
-            disabled: !draft.length,
-            onClick: exportExcel
-          }, "Excel")
+        h("details", { className: "count-more-actions" },
+          h("summary", { className: "secondary-action compact" }, "Mais ações"),
+          h("div", { className: "count-more-actions-menu" },
+            h("button", {
+              className: "secondary-action compact",
+              disabled: importing,
+              onClick: () => fileInputRef.current?.click()
+            }, importing ? "Lendo todas as folhas..." : "Importar PDF de saldo"),
+            h("button", {
+              className: "secondary-action compact",
+              onClick: () => setManualOpen(true)
+            }, "Adicionar produto"),
+            h("button", {
+              className: "secondary-action compact",
+              disabled: !draft.length,
+              onClick: exportPdf
+            }, "Exportar PDF"),
+            h("button", {
+              className: "secondary-action compact",
+              disabled: !draft.length,
+              onClick: exportExcel
+            }, "Exportar Excel"),
+            h("span", { className: "count-more-actions-divider" }),
+            h("button", {
+              className: "danger-action compact",
+              disabled: !divergentRows.length || savingCount,
+              onClick: recountDivergent
+            }, "Zerar divergentes"),
+            h("button", {
+              className: "danger-action compact",
+              disabled: !draft.length || savingCount,
+              onClick: resetCount
+            }, "Reiniciar contagem")
+          )
         )
       ),
       draft.length && h("section", { className: "count-status-filter" },
@@ -2374,7 +2360,7 @@ function Counting({
         h("div", { className: "balance-search-head" },
           h("div", null,
             h("strong", null, "Localizar produto no saldo"),
-            h("span", null, "Use o coletor/bipador ou digite o código")
+            h("span", null, "Use o coletor/bipador ou pressione Enter após digitar o código")
           ),
           h("b", null, `${visibleDraft.length}/${draft.length} SKUs`)
         ),
@@ -2395,18 +2381,6 @@ function Counting({
               findBalanceCode(searchCode);
             }
           }),
-          h("button", {
-            className: "primary-action compact",
-            disabled: !searchDigits,
-            onClick: () => findBalanceCode(searchCode)
-          }, "Pesquisar"),
-          searchCode && h("button", {
-            className: "ghost-action compact",
-            onClick: () => {
-              setSearchCode("");
-              setSearchMessage("");
-            }
-          }, "Limpar")
         ),
         searchMessage && h("div", {
           className: `balance-search-message ${searchMessage.startsWith("Encontrado") ? "success" : ""}`
@@ -2550,9 +2524,9 @@ function Counting({
     ), document.body),
     h("article", { className: "panel" },
       h("div", { className: "panel-header" }, h("h3", null, "Divergências"), h("span", null, "por SKU")),
-      h("div", { className: "stack" }, divergentRows.length
+      h("div", { className: "stack divergence-list" }, divergentRows.length
         ? divergentRows.map((item) =>
-          h("div", { className: "list-item", key: item.sku },
+          h("div", { className: "list-item divergence-item", key: item.sku },
             h("strong", null, item.sku),
             h("span", null, `${countDifference(item) > 0 ? "+" : ""}${countDifference(item)} un.`)
           )
