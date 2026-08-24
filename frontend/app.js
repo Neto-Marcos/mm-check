@@ -147,7 +147,7 @@ function App() {
         refreshing = true;
         window.location.reload();
       });
-      navigator.serviceWorker.register("/sw.js?v=2120")
+      navigator.serviceWorker.register("/sw.js?v=2150")
         .then((registration) => {
           if (registration.waiting && navigator.serviceWorker.controller) {
             setWaitingWorker(registration.waiting);
@@ -772,6 +772,50 @@ function App() {
     }
   }
 
+  async function saveCountWorkbookTemplate(file) {
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const result = await request("/api/exportacoes/modelo-contagem", {
+        method: "POST",
+        body: {
+          fileName: file.name,
+          contentType: file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          dataUrl
+        }
+      });
+      notify(result.message || "Modelo Excel salvo.");
+      return result;
+    } catch (error) {
+      notify(error.message);
+      throw error;
+    }
+  }
+
+  async function downloadCountWorkbook() {
+    try {
+      const response = await fetch("/api/exportacoes/contagem.xlsx", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Não foi possível exportar a planilha.");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `contagem-mn-check-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      notify("Planilha atualizada exportada com a formatação do modelo.");
+    } catch (error) {
+      notify(error.message);
+      throw error;
+    }
+  }
+
   async function updateCounts(counts) {
     try {
       await request("/api/contagem", { method: "POST", body: { counts } });
@@ -833,7 +877,7 @@ function App() {
       }),
       h("section", { className: "brand-panel" },
         h("div", { className: "brand-content" },
-          h("img", { className: "app-logo hero-logo", src: "/logo.png?v=2120", alt: "MN - Check" }),
+          h("img", { className: "app-logo hero-logo", src: "/logo.png?v=2150", alt: "MN - Check" }),
           h("p", { className: "eyebrow" }, "conferência operacional"),
           h("h1", null, "MN - Check"),
           h("p", null, "Controle de separação, conferência e estoque."),
@@ -895,7 +939,7 @@ function App() {
     }),
     h("aside", { className: "sidebar", "aria-label": "Navegação principal" },
       h("div", { className: "sidebar-brand" },
-        h("img", { className: "app-logo small", src: "/logo.png?v=2120", alt: "MN - Check" }),
+        h("img", { className: "app-logo small", src: "/logo.png?v=2150", alt: "MN - Check" }),
         h("div", { className: "sidebar-brand-copy" },
           h("strong", null, "MN - Check"),
           h("small", { className: "sidebar-version" }, `Versão ${appVersion}`)
@@ -1036,6 +1080,8 @@ function App() {
         ignoredProducts: data.countsImportIgnored,
         onUpload: countUpload,
         onDownloadDebug: downloadBalanceDebug,
+        onSetExcelTemplate: saveCountWorkbookTemplate,
+        onExportExcel: downloadCountWorkbook,
         onUpdate: updateCounts,
         onAddProduct: addManualBalanceProduct,
         onOfflineDraft: saveCountDraftOffline,
@@ -1906,6 +1952,8 @@ function Counting({
   ignoredProducts = [],
   onUpload,
   onDownloadDebug,
+  onSetExcelTemplate,
+  onExportExcel,
   onUpdate,
   onAddProduct,
   onOfflineDraft,
@@ -1915,6 +1963,8 @@ function Counting({
   const [draft, setDraft] = React.useState(normalizeCountRows(initialOfflineDraft?.counts || counts));
   const [importing, setImporting] = React.useState(false);
   const [savingCount, setSavingCount] = React.useState(false);
+  const [savingExcelTemplate, setSavingExcelTemplate] = React.useState(false);
+  const [exportingExcel, setExportingExcel] = React.useState(false);
   const [offlinePending, setOfflinePending] = React.useState(Boolean(initialOfflineDraft?.counts?.length));
   const [searchCode, setSearchCode] = React.useState("");
   const [searchMessage, setSearchMessage] = React.useState("");
@@ -1926,6 +1976,7 @@ function Counting({
   const [printMode, setPrintMode] = React.useState(null);
   const [printGeneratedAt, setPrintGeneratedAt] = React.useState(new Date());
   const fileInputRef = React.useRef(null);
+  const excelInputRef = React.useRef(null);
   const countInputRefs = React.useRef({});
   const manualSkuRef = React.useRef(null);
 
@@ -1977,6 +2028,20 @@ function Counting({
       window.alert(error.message);
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleExcelTemplate(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setSavingExcelTemplate(true);
+    try {
+      await onSetExcelTemplate(file);
+    } catch (_) {
+      // A mensagem já foi apresentada pelo aplicativo.
+    } finally {
+      setSavingExcelTemplate(false);
     }
   }
 
@@ -2205,8 +2270,15 @@ function Counting({
     printCountReport();
   }
 
-  function exportExcel() {
-    exportBalanceExcel();
+  async function exportExcel() {
+    setExportingExcel(true);
+    try {
+      await onExportExcel();
+    } catch (_) {
+      // A mensagem já foi apresentada pelo aplicativo.
+    } finally {
+      setExportingExcel(false);
+    }
   }
 
   const countedItems = draft.filter(hasCountMovement);
@@ -2304,6 +2376,13 @@ function Counting({
         accept: "application/pdf,.pdf",
         onChange: handlePdf
       }),
+      h("input", {
+        className: "hidden",
+        ref: excelInputRef,
+        type: "file",
+        accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx",
+        onChange: handleExcelTemplate
+      }),
       h("div", { className: "count-actions" },
         h("button", {
           className: "primary-action compact",
@@ -2335,9 +2414,14 @@ function Counting({
             }, "Exportar PDF"),
             h("button", {
               className: "secondary-action compact",
-              disabled: !draft.length,
+              disabled: savingExcelTemplate,
+              onClick: () => excelInputRef.current?.click()
+            }, savingExcelTemplate ? "Salvando modelo..." : "Definir modelo Excel"),
+            h("button", {
+              className: "secondary-action compact",
+              disabled: !draft.length || exportingExcel,
               onClick: exportExcel
-            }, "Exportar Excel"),
+            }, exportingExcel ? "Gerando Excel..." : "Exportar Excel atualizado"),
             h("span", { className: "count-more-actions-divider" }),
             h("button", {
               className: "secondary-action compact",
@@ -3392,7 +3476,7 @@ class AppErrorBoundary extends React.Component {
   render() {
     if (!this.state.error) return this.props.children;
     return h("main", { className: "fatal-error" },
-      h("img", { className: "app-logo", src: "/logo.png?v=2120", alt: "MN - Check" }),
+      h("img", { className: "app-logo", src: "/logo.png?v=2150", alt: "MN - Check" }),
       h("p", { className: "eyebrow" }, "Falha de interface"),
       h("h1", null, "Não foi possível concluir esta operação"),
       h("p", null, "Seus dados persistidos não foram apagados. Recarregue a tela para continuar."),
