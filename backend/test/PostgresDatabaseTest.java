@@ -7,16 +7,15 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 public class PostgresDatabaseTest {
   private String databaseUrl;
 
-  @BeforeEach
   void prepareDatabase() {
     databaseUrl = System.getenv("DATABASE_URL");
     assumeFalse(databaseUrl == null || databaseUrl.isBlank(), "DATABASE_URL não configurada; teste Neon ignorado.");
@@ -24,6 +23,7 @@ public class PostgresDatabaseTest {
 
   @Test
   void persistsImportsCountsAndHistoryAcrossConnections() throws Exception {
+    prepareDatabase();
     PostgresDatabase firstConnection = new PostgresDatabase(databaseUrl);
     String identity = firstConnection.testConnection();
     assertFalse(identity.isBlank());
@@ -50,7 +50,7 @@ public class PostgresDatabaseTest {
         "Teste automatizado " + suffix,
         List.of(
             new PostgresDatabase.CountRow(firstSku, 406, 405, 0, 0),
-            new PostgresDatabase.CountRow(secondSku, 108, 108, 0, 0)
+            new PostgresDatabase.CountRow(secondSku, 108, 112, 0, -4)
         )
     );
     assertTrue(countId > 0);
@@ -60,7 +60,12 @@ public class PostgresDatabaseTest {
     assertEquals("teste-neon-" + suffix + ".pdf", snapshot.importSummary().fileName());
     assertEquals(2, snapshot.rows().size());
     assertEquals(405, countedOf(snapshot, firstSku));
-    assertEquals(108, countedOf(snapshot, secondSku));
+    assertEquals(112, countedOf(snapshot, secondSku));
+    assertEquals(-4, snapshot.rows().stream()
+        .filter(row -> row.sku().equals(secondSku))
+        .findFirst()
+        .orElseThrow()
+        .otherQuantity());
 
     PostgresDatabase.ImportSummary reimported = afterRestart.saveBalanceImport(
         "teste-neon-atualizado-" + suffix + ".pdf",
@@ -134,6 +139,19 @@ public class PostgresDatabaseTest {
         + " leituras_scanner=" + scanHistory.size());
 
     cleanup(firstConnection, List.of(imported.id(), reimported.id(), manual.id()), countId, "mapa-" + suffix);
+  }
+
+  @Test
+  void classifiesConstraintViolationsSeparatelyFromDatabaseOutages() {
+    PostgresDatabase.DatabaseException constraint = new PostgresDatabase.DatabaseException(
+        "Falha de validação", new SQLException("check constraint", "23514")
+    );
+    PostgresDatabase.DatabaseException outage = new PostgresDatabase.DatabaseException(
+        "Falha de conexão", new SQLException("connection refused", "08001")
+    );
+
+    assertTrue(constraint.isConstraintViolation());
+    assertFalse(outage.isConstraintViolation());
   }
 
   private int countedOf(PostgresDatabase.BalanceSnapshot snapshot, String sku) {

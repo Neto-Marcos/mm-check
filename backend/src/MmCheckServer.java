@@ -95,9 +95,15 @@ public class MmCheckServer {
       json(exchange, 503, Map.of("error", "Banco de dados temporariamente indisponível. A alteração não foi confirmada."));
     } catch (PostgresDatabase.DatabaseException error) {
       error.printStackTrace();
-      json(exchange, 503, Map.of(
-          "error", "PostgreSQL temporariamente indisponível. Nenhuma alteração foi confirmada."
-      ));
+      if (error.isConstraintViolation()) {
+        json(exchange, 422, Map.of(
+            "error", "Os valores informados violam uma regra do estoque. Nenhuma alteração foi confirmada."
+        ));
+      } else {
+        json(exchange, 503, Map.of(
+            "error", "PostgreSQL temporariamente indisponível. Nenhuma alteração foi confirmada."
+        ));
+      }
     } catch (Exception error) {
       error.printStackTrace();
       json(exchange, 500, Map.of("error", "Erro interno do servidor."));

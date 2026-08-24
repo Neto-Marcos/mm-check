@@ -23,8 +23,12 @@ CREATE TABLE IF NOT EXISTS saldos (
 
 CREATE TABLE IF NOT EXISTS estoque_produtos (
   sku VARCHAR(64) PRIMARY KEY,
+  descricao TEXT NOT NULL DEFAULT '',
   saldo_sistema INTEGER NOT NULL CHECK (saldo_sistema >= 0),
   saldo_contado INTEGER NOT NULL DEFAULT 0 CHECK (saldo_contado >= 0),
+  saldo_assistencia INTEGER NOT NULL DEFAULT 0 CHECK (saldo_assistencia >= 0),
+  saldo_avaria INTEGER NOT NULL DEFAULT 0 CHECK (saldo_avaria >= 0),
+  saldo_outros INTEGER NOT NULL DEFAULT 0,
   ativo BOOLEAN NOT NULL DEFAULT TRUE,
   ultima_atualizacao TIMESTAMPTZ NOT NULL DEFAULT now(),
   ultima_contagem_em TIMESTAMPTZ,
@@ -45,9 +49,16 @@ CREATE TABLE IF NOT EXISTS itens_contagem (
   sku VARCHAR(64) NOT NULL,
   saldo_sistema INTEGER NOT NULL CHECK (saldo_sistema >= 0),
   quantidade_contada INTEGER NOT NULL CHECK (quantidade_contada >= 0),
+  quantidade_assistencia INTEGER NOT NULL DEFAULT 0 CHECK (quantidade_assistencia >= 0),
+  quantidade_avaria INTEGER NOT NULL DEFAULT 0 CHECK (quantidade_avaria >= 0),
+  quantidade_outros INTEGER NOT NULL DEFAULT 0,
   diferenca INTEGER NOT NULL,
   UNIQUE (contagem_id, sku)
 );
+
+-- Compatibilidade com bancos criados antes da versão 2.3.1.
+ALTER TABLE estoque_produtos DROP CONSTRAINT IF EXISTS estoque_produtos_saldo_outros_check;
+ALTER TABLE itens_contagem DROP CONSTRAINT IF EXISTS itens_contagem_quantidade_outros_check;
 
 CREATE TABLE IF NOT EXISTS conferencias (
   id BIGSERIAL PRIMARY KEY,
