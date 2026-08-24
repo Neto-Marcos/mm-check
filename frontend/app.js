@@ -148,7 +148,7 @@ function App() {
         refreshing = true;
         window.location.reload();
       });
-      navigator.serviceWorker.register("/sw.js?v=2300")
+      navigator.serviceWorker.register("/sw.js?v=2320")
         .then((registration) => {
           if (registration.waiting && navigator.serviceWorker.controller) {
             setWaitingWorker(registration.waiting);
@@ -834,7 +834,7 @@ function App() {
       }),
       h("section", { className: "brand-panel" },
         h("div", { className: "brand-content" },
-          h("img", { className: "app-logo hero-logo", src: "/logo.png?v=2300", alt: "MN - Check" }),
+          h("img", { className: "app-logo hero-logo", src: "/logo.png?v=2320", alt: "MN - Check" }),
           h("p", { className: "eyebrow" }, "conferência operacional"),
           h("h1", null, "MN - Check"),
           h("p", null, "Controle de separação, conferência e estoque."),
@@ -896,7 +896,7 @@ function App() {
     }),
     h("aside", { className: "sidebar", "aria-label": "Navegação principal" },
       h("div", { className: "sidebar-brand" },
-        h("img", { className: "app-logo small", src: "/logo.png?v=2300", alt: "MN - Check" }),
+        h("img", { className: "app-logo small", src: "/logo.png?v=2320", alt: "MN - Check" }),
         h("div", { className: "sidebar-brand-copy" },
           h("strong", null, "MN - Check"),
           h("small", { className: "sidebar-version" }, `Versão ${appVersion}`)
@@ -2330,6 +2330,32 @@ function Counting({
     printCountReport();
   }
 
+  function selectExcelTemplate() {
+    setMoreActionsOpen(false);
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx";
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        const result = await request("/api/exportacoes/modelo-contagem", {
+          method: "POST",
+          body: {
+            fileName: file.name,
+            contentType: file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            dataUrl
+          }
+        });
+        notify(result.message || "Modelo Excel salvo.");
+      } catch (error) {
+        window.alert(error.message || "Não foi possível salvar a planilha modelo.");
+      }
+    }, { once: true });
+    input.click();
+  }
+
   async function exportExcel() {
     setMoreActionsOpen(false);
     try {
@@ -2511,7 +2537,8 @@ function Counting({
             h("button", { className: "danger-action compact", disabled: savingCount, onClick: () => resetCount("all") }, "Zerar tudo"),
             h("button", { className: "secondary-action compact", disabled: !divergentRows.length || savingCount, onClick: recountDivergent }, "Zerar divergentes"),
             h("button", { className: "secondary-action compact", onClick: exportPdf }, "Exportar PDF"),
-            h("button", { className: "secondary-action compact", onClick: exportExcel }, "Exportar Excel")
+            h("button", { className: "secondary-action compact", onClick: selectExcelTemplate }, "Definir modelo Excel"),
+            h("button", { className: "secondary-action compact", onClick: exportExcel }, "Exportar Excel atualizado")
           )
         )
       ),
@@ -3611,7 +3638,7 @@ class AppErrorBoundary extends React.Component {
   render() {
     if (!this.state.error) return this.props.children;
     return h("main", { className: "fatal-error" },
-      h("img", { className: "app-logo", src: "/logo.png?v=2300", alt: "MN - Check" }),
+      h("img", { className: "app-logo", src: "/logo.png?v=2320", alt: "MN - Check" }),
       h("p", { className: "eyebrow" }, "Falha de interface"),
       h("h1", null, "Não foi possível concluir esta operação"),
       h("p", null, "Seus dados persistidos não foram apagados. Recarregue a tela para continuar."),

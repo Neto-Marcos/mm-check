@@ -38,6 +38,7 @@ import java.util.concurrent.Executors;
 public class MmCheckServer {
   public static final String APP_VERSION = AppInfo.VERSION;
   private static final int MAX_BALANCE_PDF_BYTES = 25 * 1024 * 1024;
+  private static final String COUNT_WORKBOOK_TEMPLATE = "modelo-contagem.xlsx";
   private static final int PORT = Integer.parseInt(
       System.getProperty("mmcheck.legacy.port", System.getenv().getOrDefault("PORT", "4173"))
   );
@@ -148,12 +149,53 @@ public class MmCheckServer {
 
     User user = requireUser(exchange);
 
+    if ("POST".equals(method) && "/api/exportacoes/modelo-contagem".equals(path)) {
+      requireRole(user, "admin", "stock");
+      Map<String, Object> body = readJson(exchange);
+      String fileName = string(body.get("fileName")).trim();
+      String contentType = string(body.get("contentType")).trim();
+      String dataUrl = string(body.get("dataUrl")).trim();
+      if (!fileName.toLowerCase(Locale.ROOT).endsWith(".xlsx")) {
+        throw new ApiException(400, "Selecione a planilha modelo em formato XLSX.");
+      }
+      if (!CountWorkbookExporter.CONTENT_TYPE.equals(contentType)) {
+        throw new ApiException(400, "O modelo deve ser uma planilha XLSX verdadeira.");
+      }
+      byte[] template = decodeDataUrl(dataUrl);
+      CountWorkbookExporter.TemplateInfo info;
+      try {
+        info = CountWorkbookExporter.validate(template);
+      } catch (IllegalArgumentException error) {
+        throw new ApiException(422, error.getMessage());
+      }
+      persistence.saveFile(COUNT_WORKBOOK_TEMPLATE, CountWorkbookExporter.CONTENT_TYPE, template);
+      db.recordHistory(user, "count_workbook_template", "Modelo XLSX " + fileName
+          + " salvo com " + info.products() + " produtos");
+      db.save();
+      json(exchange, 200, Map.of(
+          "message", "Modelo Excel salvo. As próximas exportações preservarão esta formatação.",
+          "sheet", info.sheetName(),
+          "products", info.products()
+      ));
+      return;
+    }
+
+    if ("GET".equals(method) && "/api/exportacoes/modelo-contagem".equals(path)) {
+      requireRole(user, "admin", "stock");
+      Optional<StoredFile> template = persistence.loadFile(COUNT_WORKBOOK_TEMPLATE);
+      json(exchange, 200, Map.of("configured", template.isPresent()));
+      return;
+    }
+
     if ("GET".equals(method) && "/api/exportacoes/contagem.xlsx".equals(path)) {
       requireRole(user, "admin", "stock");
       applyRelationalBalanceSnapshot();
-      byte[] workbook = CountWorkbookExporter.export(db.counts);
+      StoredFile template = persistence.loadFile(COUNT_WORKBOOK_TEMPLATE)
+          .orElseThrow(() -> new ApiException(409,
+              "Selecione primeiro a planilha modelo para preservar a formatação original."));
+      byte[] workbook = CountWorkbookExporter.export(template.content(), db.counts);
       file(exchange, new StoredFile(
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          CountWorkbookExporter.CONTENT_TYPE,
           workbook
       ), "contagem-mn-check-" + java.time.LocalDate.now() + ".xlsx");
       return;
