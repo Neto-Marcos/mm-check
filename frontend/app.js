@@ -2330,9 +2330,28 @@ function Counting({
     printCountReport();
   }
 
-  function exportExcel() {
+  async function exportExcel() {
     setMoreActionsOpen(false);
-    exportBalanceExcel();
+    try {
+      const response = await fetch("/api/exportacoes/contagem.xlsx", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Não foi possível gerar a planilha.");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `contagem-mn-check-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      window.alert(error.message || "Não foi possível gerar a planilha formatada.");
+    }
   }
 
   const countedItems = draft.filter(hasCountMovement);

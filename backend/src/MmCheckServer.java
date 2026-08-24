@@ -148,6 +148,17 @@ public class MmCheckServer {
 
     User user = requireUser(exchange);
 
+    if ("GET".equals(method) && "/api/exportacoes/contagem.xlsx".equals(path)) {
+      requireRole(user, "admin", "stock");
+      applyRelationalBalanceSnapshot();
+      byte[] workbook = CountWorkbookExporter.export(db.counts);
+      file(exchange, new StoredFile(
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          workbook
+      ), "contagem-mn-check-" + java.time.LocalDate.now() + ".xlsx");
+      return;
+    }
+
     if ("GET".equals(method) && "/api/importar/debug".equals(path)) {
       requireRole(user, "admin", "stock");
       StoredFile debugFile = persistence.loadFile("debug-importacao-saldo.txt")
