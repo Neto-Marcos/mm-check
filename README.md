@@ -40,6 +40,7 @@ A produção anterior está preservada na tag `v2.3.0-recovered`; as evidências
 - Upload de mapa por PDF ou multiplas imagens.
 - Revisao dos itens lidos por IA antes de salvar o mapa.
 - Importacao de saldo por PDF usando Apache PDFBox.
+- Exportacao XLSX baseada na planilha operacional real, preservando formulas e cores condicionais.
 - Historico operacional, divergencias e notificacoes para administradores.
 - Persistencia em PostgreSQL/Neon.
 - Interface responsiva para desktop, tablet e celular.
@@ -151,6 +152,8 @@ A Vercel fica reservada para o portfolio ou frontend estatico. O backend Java do
 | `POST` | `/api/importar` | importar PDF de saldo |
 | `POST` | `/api/saldos/produto` | adicionar produto manualmente ao saldo |
 | `POST` | `/api/contagem` | salvar contagem fisica |
+| `POST` | `/api/exportacoes/modelo-contagem` | salvar o modelo XLSX original |
+| `GET` | `/api/exportacoes/contagem.xlsx` | exportar o modelo atualizado com os dados do MN-Check |
 | `GET` | `/api/historico` | historico operacional |
 | `GET` | `/api/v2/workspace` | painel e contexto multi-filial |
 | `POST` | `/api/v2/receipts` | abrir carga de recebimento |
@@ -163,6 +166,17 @@ A Vercel fica reservada para o portfolio ou frontend estatico. O backend Java do
 | `POST` | `/api/v2/transfers/{id}/receive` | receber transferência no destino |
 | `PATCH` | `/api/v2/parameters/{chave}` | configurar operação por filial |
 | `GET` | `/api/v2/inventory/reconcile` | reconciliar livro e projeções |
+
+## Exportacao Excel fiel ao modelo
+
+1. Na aba de contagem, abra **Mais opcoes**.
+2. Use **Definir modelo Excel** e selecione a planilha `.xlsx` original.
+3. O modelo e validado e armazenado no PostgreSQL; nao e versionado no repositorio.
+4. Use **Exportar Excel atualizado** nas proximas exportacoes.
+
+O MN-Check localiza os produtos por `Codigo.Cor.Voltagem` e altera somente Produto, Contagem,
+Assistencia, Avaria, Ent NF., Saldo, C. Total e Diferenca. As colunas manuais, estilos, larguras,
+alturas, formulas, regras condicionais, impressao e objetos existentes permanecem no modelo.
 
 ## Testes
 
