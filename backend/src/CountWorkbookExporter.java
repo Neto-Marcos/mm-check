@@ -264,4 +264,3 @@ final class CountWorkbookExporter {
 
   record TemplateInfo(String sheetName, int products, int bytes) {}
 }
-
